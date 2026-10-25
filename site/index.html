@@ -9,7 +9,8 @@
 <meta property="og:description" content="开源的安卓 AI 音乐播放器">
 <meta property="og:image" content="https://wg.ivyea.com/og.png">
 <meta name="theme-color" content="#f3eef8">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
 :root{
   --ink:#34324d; --ink2:#75738f; --ink3:#a6a4bb; --line:rgba(80,70,140,.10);
@@ -35,7 +36,7 @@ header{position:fixed;top:0;left:0;right:0;z-index:20;transition:background .3s,
 header.on{background:rgba(250,247,252,.72);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);box-shadow:0 1px 0 var(--line)}
 .nav{height:64px;display:flex;align-items:center;justify-content:space-between}
 .logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600}
-.logo i{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff6d8,#ffbf80 45%,#c9b6f0 100%);box-shadow:0 0 14px rgba(255,170,120,.7)}
+.logo img{width:28px;height:28px;border-radius:50%;box-shadow:0 0 14px rgba(255,170,120,.55)}
 .logo small{font-weight:400;color:var(--ink3);font-size:13px}
 .links{display:flex;align-items:center;gap:28px;font-size:14px;color:var(--ink2)}
 .links a:hover{color:var(--ink)}
@@ -192,7 +193,7 @@ footer{padding:56px 0 64px;border-top:1px solid var(--line);margin-top:40px}
 <canvas id="dust"></canvas>
 
 <header id="hd"><div class="wrap nav">
-  <a class="logo" href="#"><i></i>微光<small>Lumen</small></a>
+  <a class="logo" href="#"><img src="logo.png" alt="">微光<small>Lumen</small></a>
   <nav class="links">
     <a class="hide-m" href="#now">功能</a>
     <a class="hide-m" href="#road">路线</a>
@@ -349,7 +350,7 @@ footer{padding:56px 0 64px;border-top:1px solid var(--line);margin-top:40px}
 </main>
 
 <footer><div class="wrap foot">
-  <span class="logo" style="font-size:15px"><i style="width:20px;height:20px"></i>微光 Lumen</span>
+  <span class="logo" style="font-size:15px"><img src="logo.png" alt="" style="width:22px;height:22px">微光 Lumen</span>
   <span>MIT 开源 · <a href="https://github.com/Hector-xue/weiguang" target="_blank" rel="noopener">GitHub</a> · <a href="https://ivyea.com" target="_blank" rel="noopener">ivyea</a></span>
 </div></footer>
 

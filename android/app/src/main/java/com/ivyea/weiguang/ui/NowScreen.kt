@@ -56,11 +56,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ivyea.weiguang.R
 import com.ivyea.weiguang.core.Ncm
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
@@ -126,9 +128,9 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>, onSettings: () -> Unit)
 @Composable
 private fun TopBar(now: Now?, onSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(26.dp).shadow(10.dp, CircleShape, spotColor = Wg.warm).clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFFFFF6D8), Color(0xFFFFBF80), Color(0xFFC9B6F0)))),
+        Image(
+            painterResource(R.drawable.logo_mark), contentDescription = null,
+            modifier = Modifier.size(28.dp).shadow(10.dp, CircleShape, spotColor = Wg.warm).clip(CircleShape),
         )
         Text("微光", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, modifier = Modifier.padding(start = 10.dp))
         val status = when {

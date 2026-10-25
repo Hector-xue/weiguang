@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 整张 logo 放在背景层（记号落在安全区内），前景留空 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/icon_bg" />
-    <foreground android:drawable="@drawable/ic_orb" />
-    <monochrome android:drawable="@drawable/ic_orb" />
+    <background android:drawable="@drawable/ic_launcher_full" />
+    <foreground android:drawable="@android:color/transparent" />
 </adaptive-icon>
