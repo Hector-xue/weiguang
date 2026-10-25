@@ -1,0 +1,57 @@
+name: 微光 App
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    env:
+      WG_BUILD: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: 还原签名
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/wg.keystore"
+          echo "WG_KEYSTORE=$RUNNER_TEMP/wg.keystore" >> "$GITHUB_ENV"
+      - name: 编译
+        env:
+          WG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+      - name: 改名
+        run: cp app/build/outputs/apk/release/app-release.apk weiguang.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weiguang
+          path: android/weiguang.apk
+          retention-days: 7
+      # 开发版：固定 tag「dev」、标预发布，不占正式版的 Latest
+      - name: 发到 Release（dev）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete dev --cleanup-tag -y || true
+          gh release create dev weiguang.apk --prerelease --target "$GITHUB_SHA" \
+            --title "微光 开发版 0.1.0-dev.${WG_BUILD}" --notes "M1 伴听本体开发版，未正式发布。"
