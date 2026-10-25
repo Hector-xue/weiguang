@@ -37,3 +37,8 @@ android {
     kotlinOptions { jvmTarget = "17" }
     lint { abortOnError = false; checkReleaseBuilds = false }
 }
+
+dependencies {
+    // 只为测「浏览服务搜索」：系统自带的 MediaBrowser 没有 search()
+    implementation("androidx.media:media:1.7.0")
+}

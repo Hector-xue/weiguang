@@ -12,6 +12,8 @@ import android.graphics.Typeface
 import android.media.MediaMetadata
 import android.media.audiofx.Visualizer
 import android.media.browse.MediaBrowser
+import android.support.v4.media.MediaBrowserCompat
+import android.support.v4.media.session.MediaControllerCompat
 import android.media.projection.MediaProjectionManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -64,7 +66,6 @@ class MainActivity : Activity() {
     private var vizLevel = 0f
     private var vizPeak = 0f
     private var vizFrames = 0
-    private var browser: MediaBrowser? = null
     private var pendingAfterAudio: (() -> Unit)? = null
 
     // ---------------- 界面 ----------------
@@ -132,21 +133,27 @@ class MainActivity : Activity() {
             c.transportControls.seekTo(pos + 15000)
         } })
 
-        section("4 · 点歌", "微光能不能让网易云放一首指定的歌。A~C 不用跳出去；D 会打开网易云，看完回来。")
+        section("4 · 点歌", "从上往下一个个点，每项等它出结果（约 6 秒）再点下一个。D 会跳进网易云，看一眼再切回来。")
         queryEdit = EditText(this).apply { setText("起风了"); inputType = InputType.TYPE_CLASS_TEXT; textSize = 15f }
         root.addView(queryEdit)
         row(btn("A 会话搜索") { testA() }, btn("B 系统搜索") { testB() }, btn("C 浏览服务") { testC() })
         root.addView(text("D · 链接打开（下面的链接可以改）", 13f, 0xFF75738F.toInt()).apply { setPadding(0, dp(10), 0, 0) })
         uriEdit = EditText(this).apply { setText("orpheus://song/$SONG_ID"); inputType = InputType.TYPE_TEXT_VARIATION_URI; textSize = 13f }
         root.addView(uriEdit)
-        row(btn("D1 搜索链接") { testD("D1", "orpheus://search?keyword=" + Uri.encode(query()), false) },
-            btn("D2 歌曲链接") { testD("D2", "orpheus://song/$SONG_ID", true) })
-        row(btn("D3 网页歌曲") { testD("D3", "https://music.163.com/song?id=$SONG_ID", true) },
-            btn("D4 手机网页") { testD("D4", "https://y.music.163.com/m/song?id=$SONG_ID", true) })
-        row(btn("D5 打开上面填的链接") { testD("D5", uriEdit.text.toString().trim(), false) })
+        row(btn("D2 歌曲链接") { testD("D2", "orpheus://song/$SONG_ID", "起风了") },
+            btn("D3 网页歌曲") { testD("D3", "https://music.163.com/song?id=$SONG_ID", "起风了") })
+        row(btn("D4 手机网页") { testD("D4", "https://y.music.163.com/m/song?id=$SONG_ID", "起风了") },
+            btn("D5 打开上面填的链接") { testD("D5", uriEdit.text.toString().trim(), query()) })
+        root.addView(text("E · 按 ID 播放，不跳进网易云", 13f, 0xFF75738F.toInt()).apply { setPadding(0, dp(10), 0, 0) })
+        row(btn("E1 车机会话") { testE("E1 车机会话按ID", true, "other_id__$SONG_ID") },
+            btn("E2 通知会话") { testE("E2 通知会话按ID", false, "other_id__$SONG_ID") },
+            btn("E3 纯数字ID") { testE("E3 纯数字ID", true, SONG_ID) })
+        root.addView(text("F · 读你的歌单　G · 车机搜索　H · 点喜欢（会真的点，再按一次取消）", 13f, 0xFF75738F.toInt()).apply { setPadding(0, dp(10), 0, 0) })
+        row(btn("F 读我的音乐") { testF() }, btn("F2 放歌单第3首") { testF2() })
+        row(btn("G 车机搜索") { testG() }, btn("H 喜欢") { testH() })
 
-        section("5 · 频谱", "网易云在放歌时点开，看下面的柱子会不会跟着动。方式 2 弹窗时选「整个屏幕」。")
-        row(btn("方式1 系统可视化") { startViz() }, btn("停止") { stopViz() })
+        section("5 · 频谱", "网易云在放歌时点开，看柱子动不动，等出结果再停。方式 2 弹窗里选「整个屏幕」→「开始」。")
+        row(btn("方式1 系统可视化") { startViz() }, btn("停止") { stopViz(true) })
         vizView = SpectrumView(this)
         root.addView(vizView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(90)))
         vizText = text("未开始", 13f)
@@ -162,13 +169,28 @@ class MainActivity : Activity() {
         logText = text("", 12f, 0xFF55536F.toInt()).apply { setTextIsSelectable(true) }
         root.addView(logText)
 
+        // 上次崩溃的原因记下来，写进报告
+        val crash = java.io.File(filesDir, "crash.txt")
+        if (crash.exists()) {
+            val t = crash.readText()
+            results["上次崩溃"] = t.lineSequence().take(2).joinToString(" | ")
+            log("上次崩溃：\n" + t.take(2500))
+            crash.delete()
+        }
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { th, e ->
+            try { crash.writeText(android.util.Log.getStackTraceString(e)) } catch (_: Throwable) {}
+            prev?.uncaughtException(th, e)
+        }
+
         ui.post(tick)
     }
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
-        stopViz()
-        browser?.disconnect()
+        stopViz(false)
+        ucar?.disconnect()
+        compat?.disconnect()
         super.onDestroy()
     }
 
@@ -191,6 +213,7 @@ class MainActivity : Activity() {
     }
 
     private fun result(key: String, s: String) {
+        busy = false
         results[key] = s
         log("【$key】$s")
     }
@@ -266,7 +289,7 @@ class MainActivity : Activity() {
             .append(" · 状态：").append(stateName(st?.state))
             .append(" · 进度：").append(fmt(st?.position ?: -1L)).append(" / ").append(fmt(dur)).append('\n')
         sb.append("  支持：").append(actionNames(st?.actions ?: 0L)).append('\n')
-        val custom = st?.customActions?.joinToString("、") { it.name.toString() }
+        val custom = st?.customActions?.joinToString("、") { "${it.name}=${it.action}" }
         if (!custom.isNullOrEmpty()) sb.append("  自定义按钮：").append(custom).append('\n')
         sb.append("  播放队列：").append(c.queue?.size?.let { "$it 首" } ?: "不公开").append('\n')
         if (full && m != null) {
@@ -323,12 +346,31 @@ class MainActivity : Activity() {
 
     // ---------------- 4 · 点歌 ----------------
 
+    // 一次只测一项：上一项没出结果就点下一项，会把别人的结果算到自己头上（第一版 D2/D3 就串了）
+    private var busy = false
+    private fun guard(): Boolean {
+        if (busy) { Toast.makeText(this, "上一项还在判断，等几秒", Toast.LENGTH_SHORT).show(); return false }
+        busy = true
+        return true
+    }
+
+    // 如果网易云本来就在放目标歌，先切走，否则"放上了"无从判断
+    private fun freshStart(want: String, go: () -> Unit) {
+        val c = ncm()
+        if (c != null && title(c).contains(want, ignoreCase = true)) {
+            log("当前已经在放「$want」，先切到下一首，免得误判")
+            c.transportControls.skipToNext()
+            ui.postDelayed(go, 2500)
+        } else go()
+    }
+
     private fun verifyLater(key: String, before: String, want: String) {
         ui.postDelayed({
             val now = title(ncm())
             val r = when {
                 now.isEmpty() -> "❓ 读不到网易云当前歌名"
-                now.contains(want, ignoreCase = true) -> "✅ 放上了《$now》"
+                now.contains(want, ignoreCase = true) && now != before -> "✅ 放上了《$now》"
+                now.contains(want, ignoreCase = true) -> "❓ 本来就在放《$now》，判断不了"
                 now != before -> "⚠️ 歌变了，但不是要的：《$before》→《$now》"
                 else -> "❌ 歌没变，还是《$now》"
             }
@@ -337,6 +379,7 @@ class MainActivity : Activity() {
     }
 
     private fun testA() {
+        if (!guard()) return
         val c = ncm() ?: return result("A 会话搜索", "❌ 没找到网易云的播放会话")
         val q = query()
         val supported = (c.playbackState?.actions ?: 0L) and PlaybackState.ACTION_PLAY_FROM_SEARCH != 0L
@@ -347,6 +390,7 @@ class MainActivity : Activity() {
     }
 
     private fun testB() {
+        if (!guard()) return
         val q = query()
         val i = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
             .setPackage(NCM)
@@ -361,59 +405,189 @@ class MainActivity : Activity() {
         verifyLater("B 系统搜索", before, q)
     }
 
-    private fun testC() {
-        val q = query()
+    // 网易云的车机浏览服务（UCarService），连一次复用
+    private var ucar: MediaBrowser? = null
+
+    private fun withUcar(key: String, then: (MediaBrowser) -> Unit) {
+        ucar?.let { if (it.isConnected) { then(it); return } }
         val svc = packageManager.queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE).setPackage(NCM), 0)
-        log("C 网易云的媒体浏览服务：${svc.joinToString { it.serviceInfo.name }.ifEmpty { "没有" }}")
-        if (svc.isEmpty()) return result("C 浏览服务", "❌ 网易云没有对外的媒体浏览服务")
+        if (svc.isEmpty()) return result(key, "❌ 网易云没有对外的媒体浏览服务")
         val info = svc[0].serviceInfo
-        browser?.disconnect()
         lateinit var b: MediaBrowser
         b = MediaBrowser(this, ComponentName(info.packageName, info.name), object : MediaBrowser.ConnectionCallback() {
-            override fun onConnected() {
-                log("C 连上了，根目录：${b.root}")
-                b.subscribe(b.root, object : MediaBrowser.SubscriptionCallback() {
-                    override fun onChildrenLoaded(parentId: String, children: MutableList<MediaBrowser.MediaItem>) {
-                        log("C 根目录 ${children.size} 项：" + children.take(15).joinToString("；") {
-                            "${it.description.title}${if (it.isPlayable) "(可播)" else ""}${if (it.isBrowsable) "(可展开)" else ""}"
-                        })
-                    }
-                    override fun onError(parentId: String) { log("C 读根目录失败") }
-                })
-                // 系统自带的 MediaBrowser 没有 search()，改用浏览服务给的会话去"按搜索播放"
-                // （车机走的就是这条路，和 A 用的不是同一个会话入口）
-                val before = title(ncm())
-                try {
-                    MediaController(this@MainActivity, b.sessionToken).transportControls.playFromSearch(q, Bundle())
-                    log("C 已通过浏览服务的会话发出「按搜索播放」：$q")
-                    verifyLater("C 浏览服务", before, q)
-                } catch (e: Throwable) {
-                    result("C 浏览服务", "⚠️ 连上了，但发不了播放指令：${e.message}")
-                }
-            }
-            override fun onConnectionFailed() { result("C 浏览服务", "❌ 网易云拒绝连接（多半只放行车机 / Android Auto）") }
-            override fun onConnectionSuspended() { log("C 连接被挂起") }
+            override fun onConnected() { log("已连上 ${info.name}，根目录 ${b.root}"); then(b) }
+            override fun onConnectionFailed() { result(key, "❌ 浏览服务拒绝连接") }
+            override fun onConnectionSuspended() { log("浏览服务连接被挂起") }
         }, null)
-        browser = b
-        try { b.connect() } catch (e: Throwable) { result("C 浏览服务", "❌ 连接出错 ${e.message}") }
+        ucar = b
+        try { b.connect() } catch (e: Throwable) { result(key, "❌ 连接出错 ${e.message}") }
     }
 
-    private fun testD(key: String, uri: String, songLink: Boolean) {
-        if (uri.isEmpty()) return
+    private fun children(b: MediaBrowser, id: String, cb: (List<MediaBrowser.MediaItem>?) -> Unit) {
+        var done = false
+        b.subscribe(id, object : MediaBrowser.SubscriptionCallback() {
+            override fun onChildrenLoaded(parentId: String, children: MutableList<MediaBrowser.MediaItem>) {
+                if (done) return
+                done = true; b.unsubscribe(parentId); cb(children)
+            }
+            override fun onError(parentId: String) {
+                if (done) return
+                done = true; cb(null)
+            }
+        })
+    }
+
+    private fun item(it: MediaBrowser.MediaItem) =
+        "${it.description.title}[${it.mediaId}]${if (it.isPlayable) "(可播)" else ""}${if (it.isBrowsable) "(可展开)" else ""}"
+
+    private fun testC() {
+        if (!guard()) return
+        val q = query()
+        withUcar("C 浏览服务") { b ->
+            val before = title(ncm())
+            try {
+                MediaController(this, b.sessionToken).transportControls.playFromSearch(q, Bundle())
+                log("C 已通过浏览服务的会话发出「按搜索播放」：$q")
+                verifyLater("C 浏览服务", before, q)
+            } catch (e: Throwable) {
+                result("C 浏览服务", "⚠️ 连上了，但发不了播放指令：${e.message}")
+            }
+        }
+    }
+
+    private fun testD(key: String, uri: String, want: String) {
+        if (uri.isEmpty() || !guard()) return
         val i = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(NCM).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val handlers = packageManager.queryIntentActivities(i, 0)
         log("$key $uri → 网易云能接的界面 ${handlers.size} 个")
         if (handlers.isEmpty()) return result("$key 链接", "❌ 网易云不认这个链接：$uri")
-        val before = title(ncm())
-        try { startActivity(i) } catch (e: Throwable) { return result("$key 链接", "❌ 打开出错 ${e.message}") }
-        // 打开歌曲页不一定自动播放；回来看结果时也请在报告里补一句"打开后看到了什么"
-        verifyLater("$key 链接", before, if (songLink) "起风了" else query())
+        freshStart(want) {
+            val before = title(ncm())
+            try { startActivity(i) } catch (e: Throwable) { return@freshStart result("$key 链接", "❌ 打开出错 ${e.message}") }
+            verifyLater("$key 链接", before, want)
+        }
+    }
+
+    // E：按 ID 播放、不跳进网易云。ID 格式照抄它自己上报的 MEDIA_ID（other_id__歌曲ID）
+    private fun testE(key: String, viaBrowser: Boolean, mediaId: String) {
+        if (!guard()) return
+        freshStart("起风了") {
+            val before = title(ncm())
+            val go: (MediaController) -> Unit = { c ->
+                try {
+                    c.transportControls.playFromMediaId(mediaId, Bundle())
+                    log("$key 发出「按 ID 播放」$mediaId（${if (viaBrowser) "浏览服务会话" else "通知里的会话"}）")
+                    verifyLater(key, before, "起风了")
+                } catch (e: Throwable) { result(key, "❌ 调用出错 ${e.message}") }
+            }
+            if (viaBrowser) withUcar(key) { b -> go(MediaController(this, b.sessionToken)) }
+            else ncm()?.let(go) ?: result(key, "❌ 没找到网易云的播放会话")
+        }
+    }
+
+    // F：读「我的音乐」→ 第一个歌单 → 歌曲（带 ID）
+    private var lastSongs: List<MediaBrowser.MediaItem> = emptyList()
+
+    private fun testF() {
+        if (!guard()) return
+        withUcar("F 我的音乐") { b ->
+            children(b, b.root) { top ->
+                log("F 根目录：" + (top?.joinToString("；") { item(it) } ?: "读取失败"))
+                val mine = top?.firstOrNull { it.description.title?.toString()?.contains("我的") == true }
+                    ?: return@children result("F 我的音乐", "❌ 根目录没有「我的音乐」")
+                children(b, mine.mediaId!!) { lists ->
+                    log("F 我的音乐 ${lists?.size ?: 0} 项：" + (lists?.take(15)?.joinToString("；") { item(it) } ?: "读取失败"))
+                    val pl = lists?.firstOrNull { it.isBrowsable }
+                        ?: return@children result("F 我的音乐", if (lists.isNullOrEmpty()) "❌ 读不到内容（可能要车机授权或登录）" else "⚠️ 有内容但没有可展开的歌单")
+                    children(b, pl.mediaId!!) { songs ->
+                        val ss = songs?.filter { it.isPlayable && it.mediaId != null } ?: emptyList()
+                        lastSongs = ss
+                        log("F 歌单「${pl.description.title}」${songs?.size ?: 0} 项：" + ss.take(10).joinToString("；") { item(it) })
+                        result("F 我的音乐", if (ss.isNotEmpty()) "✅ 读到歌单「${pl.description.title}」里 ${ss.size} 首歌（带 ID）" else "⚠️ 歌单打开了，但没有可播放的歌")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun testF2() {
+        val s = lastSongs.getOrNull(2) ?: lastSongs.firstOrNull() ?: return result("F2 放歌单里的歌", "❌ 先点 F")
+        val want = s.description.title?.toString()?.take(6) ?: return
+        if (!guard()) return
+        freshStart(want) {
+            withUcar("F2 放歌单里的歌") { b ->
+                val before = title(ncm())
+                MediaController(this, b.sessionToken).transportControls.playFromMediaId(s.mediaId!!, Bundle())
+                log("F2 放《${s.description.title}》[${s.mediaId}]")
+                verifyLater("F2 放歌单里的歌", before, want)
+            }
+        }
+    }
+
+    // G：用 androidx 的浏览器发搜索（车机语音搜歌走这条），看网易云的车机服务支不支持
+    private var compat: MediaBrowserCompat? = null
+
+    private fun testG() {
+        if (!guard()) return
+        val q = query()
+        val svc = packageManager.queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE).setPackage(NCM), 0)
+        if (svc.isEmpty()) return result("G 车机搜索", "❌ 没有浏览服务")
+        val info = svc[0].serviceInfo
+        compat?.disconnect()
+        lateinit var b: MediaBrowserCompat
+        b = MediaBrowserCompat(this, ComponentName(info.packageName, info.name), object : MediaBrowserCompat.ConnectionCallback() {
+            override fun onConnected() {
+                b.search(q, null, object : MediaBrowserCompat.SearchCallback() {
+                    override fun onSearchResult(query: String, extras: Bundle?, items: MutableList<MediaBrowserCompat.MediaItem>) {
+                        log("G 搜索「$query」返回 ${items.size} 项：" + items.take(8).joinToString("；") { "${it.description.title}[${it.mediaId}]" })
+                        val first = items.firstOrNull { it.isPlayable && it.mediaId != null }
+                            ?: return result("G 车机搜索", if (items.isEmpty()) "⚠️ 支持搜索，但没有结果" else "⚠️ 有结果，但不能直接播放")
+                        val before = title(ncm())
+                        MediaControllerCompat(this@MainActivity, b.sessionToken).transportControls.playFromMediaId(first.mediaId!!, null)
+                        verifyLater("G 车机搜索", before, q)
+                    }
+                    override fun onError(query: String, extras: Bundle?) {
+                        result("G 车机搜索", "❌ 网易云的车机服务不支持搜索")
+                    }
+                })
+            }
+            override fun onConnectionFailed() { result("G 车机搜索", "❌ 连接被拒") }
+        }, null)
+        compat = b
+        try { b.connect() } catch (e: Throwable) { result("G 车机搜索", "❌ 连接出错 ${e.message}") }
+    }
+
+    // H：点「喜欢」。会真的改你账号里的红心，再按一次取消
+    private fun testH() {
+        val c = ncm() ?: return result("H 喜欢", "❌ 没找到网易云的播放会话")
+        val act = c.playbackState?.customActions?.firstOrNull { it.name.toString() == "like" || it.action.contains("like", true) }
+            ?: return result("H 喜欢", "❌ 没找到 like 按钮")
+        val beforeIcon = act.icon
+        val beforeCollect = c.metadata?.getLong("ucar.media.metadata.COLLECT_STATE")
+        log("H 发送 like（action=${act.action}）")
+        c.transportControls.sendCustomAction(act.action, Bundle())
+        ui.postDelayed({
+            val n = ncm()
+            val a2 = n?.playbackState?.customActions?.firstOrNull { it.action == act.action }
+            val col = n?.metadata?.getLong("ucar.media.metadata.COLLECT_STATE")
+            val changed = a2?.icon != beforeIcon || col != beforeCollect
+            result("H 喜欢", (if (changed) "✅ 状态变了" else "❓ 没看到状态变化") +
+                "（图标 $beforeIcon→${a2?.icon}，收藏 $beforeCollect→$col）请看网易云里红心变没变")
+        }, 1800)
     }
 
     // ---------------- 5 · 频谱 ----------------
 
+    private fun judgeViz() {
+        result("频谱·方式1", when {
+            vizFrames == 0 -> "❌ 一帧数据都没收到"
+            vizPeak < 0.002f -> "❌ 收到 $vizFrames 帧但全是静音（系统不给，或网易云没在放）"
+            else -> "✅ 有声音数据，最高强度 %.3f（%d 帧）".format(vizPeak, vizFrames)
+        })
+    }
+
     private fun startViz() = askAudio {
-        stopViz()
+        stopViz(false)
         try {
             val v = Visualizer(0)
             v.setCaptureSize(Visualizer.getCaptureSizeRange()[1].coerceAtMost(1024))
@@ -440,27 +614,32 @@ class MainActivity : Activity() {
                     ui.post { vizView.set(copy) }
                 }
             }, Visualizer.getMaxCaptureRate() / 2, false, true)
+            vizPeak = 0f; vizFrames = 0
             v.setEnabled(true)
             viz = v
-            vizPeak = 0f; vizFrames = 0
-            log("方式1 已开启，等 8 秒自动判断")
-            ui.postDelayed({
-                if (viz == null) return@postDelayed
-                result("频谱·方式1", when {
-                    vizFrames == 0 -> "❌ 一帧数据都没收到"
-                    vizPeak < 0.002f -> "❌ 收到 $vizFrames 帧但全是静音（系统不给，或网易云没在放）"
-                    else -> "✅ 有声音数据，最高强度 %.3f".format(vizPeak)
-                })
-            }, 8000)
+            log("方式1 已开启，8 秒后自动判断（提前按停止也会判断）")
+            ui.postDelayed({ if (viz != null) judgeViz() }, 8000)
         } catch (e: Throwable) {
             result("频谱·方式1", "❌ 开不了：${e.javaClass.simpleName} ${e.message}")
         }
     }
 
-    private fun stopViz() {
+    private fun stopViz(judge: Boolean = true) {
+        if (viz != null && judge) judgeViz()
         try { viz?.setEnabled(false); viz?.release() } catch (_: Throwable) {}
         viz = null
     }
+
+    private fun judgeCapture() {
+        val st = Probe.captureStatus
+        result("频谱·方式2", when {
+            st.startsWith("失败") -> "❌ $st"
+            Probe.capturePeak < 0.0005f -> "❌ 录到的全是静音（网易云多半禁止了被录制）状态：$st"
+            else -> "✅ 截到了声音，最高强度 %.4f".format(Probe.capturePeak)
+        })
+    }
+
+    private var capturing = false
 
     private fun startCapture() {
         if (Build.VERSION.SDK_INT < 29) return result("频谱·方式2", "❌ 系统低于安卓 10，不支持")
@@ -476,24 +655,20 @@ class MainActivity : Activity() {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQ_CAPTURE) return
-        if (resultCode != RESULT_OK || data == null) return result("频谱·方式2", "❌ 授权弹窗被取消")
+        if (resultCode != RESULT_OK || data == null) return result("频谱·方式2", "❌ 授权弹窗被取消（要选「整个屏幕」再点开始）")
         Probe.capturePeak = 0f
         Probe.captureStatus = "启动中"
         startForegroundService(Intent(this, CaptureService::class.java)
             .putExtra(CaptureService.EXTRA_CODE, resultCode)
             .putExtra(CaptureService.EXTRA_DATA, data))
-        log("方式2 已开启，等 8 秒自动判断")
-        ui.postDelayed({
-            val st = Probe.captureStatus
-            result("频谱·方式2", when {
-                st.startsWith("失败") -> "❌ $st"
-                Probe.capturePeak < 0.0005f -> "❌ 录到的全是静音（网易云多半禁止了被录制）"
-                else -> "✅ 截到了声音，最高强度 %.4f".format(Probe.capturePeak)
-            })
-        }, 8000)
+        capturing = true
+        log("方式2 已开启，8 秒后自动判断（提前按停止也会判断）")
+        ui.postDelayed({ if (capturing) judgeCapture() }, 8000)
     }
 
     private fun stopCapture() {
+        if (capturing) judgeCapture()
+        capturing = false
         startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))
     }
 
