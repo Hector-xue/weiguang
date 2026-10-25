@@ -3,7 +3,7 @@ package com.ivyea.weiguang.ui
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -75,7 +75,6 @@ fun App() {
     val accent by animateColorAsState(mood.accent, tween(900), label = "accent")
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    var settings by rememberSaveable { mutableStateOf(false) }
 
     // 开了通知使用权就接上播放会话；曲库超过 12 小时没同步就自动同步一次
     LaunchedEffect(listenerOn) {
@@ -84,8 +83,7 @@ fun App() {
         if (Ncm.version(ctx) != null && System.currentTimeMillis() - Library.state.value.syncedAt > AUTO_SYNC_MS) Library.sync(ctx)
     }
 
-    BackHandler(enabled = settings) { settings = false }
-    BackHandler(enabled = !settings && tab != 0) { tab = 0 }
+    BackHandler(enabled = tab != 0) { tab = 0 }
 
     Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(a, b, c), start = Offset.Zero, end = Offset.Infinite))) {
         Dust(Modifier.fillMaxSize(), time)
@@ -94,27 +92,25 @@ fun App() {
             return@Box
         }
         val m = Mood(a, b, c, accent)
-        if (tab == 0) NowScreen(now, m, time) { settings = true }
-        else LibraryScreen(lib, now, accent)
-        Dock(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
-        AnimatedVisibility(
-            visible = settings,
-            enter = slideInVertically { it / 3 } + fadeIn(tween(220)),
-            exit = slideOutVertically { it / 3 } + fadeOut(tween(180)),
-        ) {
-            SettingsPanel { settings = false }
+        Crossfade(targetState = tab, animationSpec = tween(260), label = "tab") { t ->
+            when (t) {
+                0 -> NowScreen(now, m, time)
+                1 -> LibraryScreen(lib, now, accent, time)
+                else -> SettingsPage()
+            }
         }
+        Dock(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
     }
 }
 
 @Composable
 private fun Dock(tab: Int, modifier: Modifier, onTab: (Int) -> Unit) {
     Row(modifier.navigationBarsPadding().padding(bottom = 14.dp).glass(999.dp, 14.dp).padding(5.dp)) {
-        listOf("播放", "曲库").forEachIndexed { i, label ->
+        listOf("播放", "曲库", "设置").forEachIndexed { i, label ->
             val sel = i == tab
             Box(
                 Modifier.clip(RoundedCornerShape(999.dp)).background(if (sel) Color.White else Color.Transparent)
-                    .clickable { onTab(i) }.padding(horizontal = 30.dp, vertical = 11.dp),
+                    .clickable { onTab(i) }.padding(horizontal = 24.dp, vertical = 11.dp),
             ) {
                 Text(label, fontSize = 14.sp, color = if (sel) Wg.ink else Wg.ink2, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
             }

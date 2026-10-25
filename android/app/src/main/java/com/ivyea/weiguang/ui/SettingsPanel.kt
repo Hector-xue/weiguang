@@ -48,7 +48,7 @@ import com.ivyea.weiguang.core.Spectrum
 import com.ivyea.weiguang.service.NowListener
 
 @Composable
-fun SettingsPanel(onClose: () -> Unit) {
+fun SettingsPage() {
     val ctx = LocalContext.current
     val tick = rememberResumeTick()
     var spectrum by remember { mutableStateOf(Prefs.spectrum) }
@@ -66,16 +66,11 @@ fun SettingsPanel(onClose: () -> Unit) {
     LaunchedEffect(canOverlay, orb) { NowListener.instance?.syncOrb() }
 
     Column(
-        Modifier.fillMaxSize().background(Wg.bg.copy(alpha = 0.97f)).statusBarsPadding().navigationBarsPadding()
-            .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
+        Modifier.fillMaxSize().statusBarsPadding()
+            .verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("设置", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, modifier = Modifier.weight(1f))
-            Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Close, contentDescription = "关闭", tint = Wg.ink2)
-            }
-        }
-        Spacer(Modifier.height(18.dp))
+        Text("设置", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+        Spacer(Modifier.height(20.dp))
 
         Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp)) {
             SwitchRow(

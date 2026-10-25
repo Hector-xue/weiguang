@@ -71,7 +71,7 @@ import com.ivyea.weiguang.core.Spectrum
 import kotlinx.coroutines.delay
 
 @Composable
-fun NowScreen(now: Now?, mood: Mood, time: State<Float>, onSettings: () -> Unit) {
+fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
     val ctx = LocalContext.current
     val bands = Spectrum.bands.collectAsState()
     var granted by remember { mutableStateOf(Spectrum.granted(ctx)) }
@@ -83,7 +83,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>, onSettings: () -> Unit)
     Column(
         Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp).padding(bottom = 92.dp),
     ) {
-        TopBar(now, onSettings)
+        TopBar(now)
         if (now == null) {
             EmptyNow(time)
             return@Column
@@ -126,7 +126,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>, onSettings: () -> Unit)
 }
 
 @Composable
-private fun TopBar(now: Now?, onSettings: () -> Unit) {
+private fun TopBar(now: Now?) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Image(
             painterResource(R.drawable.logo_mark), contentDescription = null,
@@ -143,9 +143,6 @@ private fun TopBar(now: Now?, onSettings: () -> Unit) {
             Text(status, fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 6.dp))
         }
         Spacer(Modifier.weight(1f))
-        Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onSettings), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Settings, contentDescription = "设置", tint = Wg.ink2)
-        }
     }
 }
 

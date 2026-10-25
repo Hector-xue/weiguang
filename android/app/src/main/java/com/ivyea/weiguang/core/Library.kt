@@ -69,7 +69,7 @@ object Library {
         set { it.copy(syncing = true, syncMsg = "连接网易云…") }
         val b = connect(ctx)
         if (b == null) {
-            set { it.copy(syncing = false, syncMsg = "连不上网易云（没装，或者它不让连）") }
+            set { it.copy(syncing = false, syncMsg = connectError) }
             return
         }
         try {
@@ -106,21 +106,29 @@ object Library {
 
     private inline fun set(f: (LibState) -> LibState) { _state.value = f(_state.value) }
 
+    private var connectError = ""
+
     private suspend fun connect(ctx: Context): MediaBrowser? {
+        if (Ncm.version(ctx) == null) { connectError = "还没装网易云"; return null }
         val svc = ctx.packageManager
             .queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE).setPackage(Ncm.PKG), 0)
-            .firstOrNull()?.serviceInfo ?: return null
-        return withTimeoutOrNull(10_000) {
+            .firstOrNull()?.serviceInfo
+        if (svc == null) { connectError = "这个版本的网易云没有开放歌单接口"; return null }
+        connectError = "网易云拒绝了连接。确认已给微光开「通知使用权」；小米手机还要在应用设置里允许微光「关联启动」"
+        var refused = false
+        val b = withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<MediaBrowser?> { cont ->
                 lateinit var b: MediaBrowser
                 b = MediaBrowser(ctx, ComponentName(svc.packageName, svc.name), object : MediaBrowser.ConnectionCallback() {
                     override fun onConnected() { if (cont.isActive) cont.resume(b) }
-                    override fun onConnectionFailed() { if (cont.isActive) cont.resume(null) }
+                    override fun onConnectionFailed() { refused = true; if (cont.isActive) cont.resume(null) }
                 }, null)
                 cont.invokeOnCancellation { main.post { try { b.disconnect() } catch (_: Throwable) {} } }
                 b.connect()
             }
         }
+        if (b == null && !refused) connectError = "连接网易云超时，稍后再试"
+        return b
     }
 
     // 分页读完一个节点；服务不认分页时第一页就是全部（没有新条目就停）
