@@ -380,19 +380,16 @@ class MainActivity : Activity() {
                     }
                     override fun onError(parentId: String) { log("C 读根目录失败") }
                 })
-                b.search(q, null, object : MediaBrowser.SearchCallback() {
-                    override fun onSearchResult(query: String, extras: Bundle?, items: MutableList<MediaBrowser.MediaItem>) {
-                        log("C 搜索「$query」返回 ${items.size} 项：" + items.take(8).joinToString("；") { "${it.description.title}" })
-                        val first = items.firstOrNull { it.isPlayable && it.mediaId != null }
-                        if (first == null) { result("C 浏览服务", "⚠️ 连上了，但搜索没有可播放的结果"); return }
-                        val before = title(ncm())
-                        MediaController(this@MainActivity, b.sessionToken).transportControls.playFromMediaId(first.mediaId!!, null)
-                        verifyLater("C 浏览服务", before, q)
-                    }
-                    override fun onError(query: String, extras: Bundle?) {
-                        result("C 浏览服务", "⚠️ 连上了，但不支持搜索（根目录内容见上一条）")
-                    }
-                })
+                // 系统自带的 MediaBrowser 没有 search()，改用浏览服务给的会话去"按搜索播放"
+                // （车机走的就是这条路，和 A 用的不是同一个会话入口）
+                val before = title(ncm())
+                try {
+                    MediaController(this@MainActivity, b.sessionToken).transportControls.playFromSearch(q, Bundle())
+                    log("C 已通过浏览服务的会话发出「按搜索播放」：$q")
+                    verifyLater("C 浏览服务", before, q)
+                } catch (e: Throwable) {
+                    result("C 浏览服务", "⚠️ 连上了，但发不了播放指令：${e.message}")
+                }
             }
             override fun onConnectionFailed() { result("C 浏览服务", "❌ 网易云拒绝连接（多半只放行车机 / Android Auto）") }
             override fun onConnectionSuspended() { log("C 连接被挂起") }
