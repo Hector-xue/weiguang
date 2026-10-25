@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   apk:
@@ -43,3 +44,7 @@ jobs:
           gh release delete probe --cleanup-tag -y || true
           gh release create probe weiguang-probe.apk --prerelease --target "$GITHUB_SHA" \
             --title "验证 App 0.1.${PROBE_BUILD}" --notes "伴听模式可行性验证工具，不是正式 App。"
+      - name: 更新下载站
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml -R "$GITHUB_REPOSITORY" --ref main

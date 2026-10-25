@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: android-${{ github.ref }}
@@ -55,3 +56,7 @@ jobs:
           gh release delete dev --cleanup-tag -y || true
           gh release create dev weiguang.apk --prerelease --target "$GITHUB_SHA" \
             --title "微光 开发版 0.1.0-dev.${WG_BUILD}" --notes "M1 伴听本体开发版，未正式发布。"
+      - name: 更新下载站
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml -R "$GITHUB_REPOSITORY" --ref main

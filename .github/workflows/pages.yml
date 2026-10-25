@@ -4,10 +4,12 @@ on:
   push:
     branches: [main]
     paths: ['site/**', '.github/workflows/pages.yml']
+  # App / 验证工具编完会来触发一次，把最新安装包一起发到 Pages
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -23,6 +25,15 @@ jobs:
       url: ${{ steps.d.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # 安装包不进仓库：从 Release 取最新的放进站点，下载地址 wg.ivyea.com/download/…
+      - name: 取安装包
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p site/download
+          gh release download dev -p weiguang.apk -D site/download -R "$GITHUB_REPOSITORY" || echo "还没有开发版"
+          gh release download probe -p weiguang-probe.apk -D site/download -R "$GITHUB_REPOSITORY" || echo "没有验证工具"
+          ls -la site/download
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

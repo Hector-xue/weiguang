@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.media.MediaMetadata
 import android.media.session.MediaController
+import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Bundle
@@ -56,6 +57,7 @@ object NowPlaying {
     private val cb = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) = emit()
         override fun onPlaybackStateChanged(state: PlaybackState?) = emit()
+        override fun onQueueChanged(queue: MutableList<MediaSession.QueueItem>?) = absorb()
         override fun onSessionDestroyed() {
             ctrl?.unregisterCallback(this)
             ctrl = null
@@ -92,8 +94,20 @@ object NowPlaying {
             ctrl?.unregisterCallback(cb)
             ctrl = best
             best?.registerCallback(cb, main)
+            absorb()
         }
         emit()
+    }
+
+    private fun absorb() {
+        val c = ctrl ?: return
+        val q = c.queue ?: return
+        val items = q.mapNotNull { qi ->
+            val d = qi.description
+            val id = Ncm.songIdOf(d.mediaId) ?: return@mapNotNull null
+            Triple(id, d.title?.toString() ?: "", d.subtitle?.toString() ?: "")
+        }
+        Library.absorbQueue(c.queueTitle?.toString(), items)
     }
 
     private fun likeAction(c: MediaController) = c.playbackState?.customActions?.firstOrNull {

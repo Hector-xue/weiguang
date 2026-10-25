@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ivyea.weiguang.core.Buddy
 import com.ivyea.weiguang.core.Library
 import com.ivyea.weiguang.core.Ncm
 import com.ivyea.weiguang.core.NowPlaying
@@ -83,6 +84,10 @@ fun App() {
         if (Ncm.version(ctx) != null && System.currentTimeMillis() - Library.state.value.syncedAt > AUTO_SYNC_MS) Library.sync(ctx)
     }
 
+    // 换歌、换时段时更新「微光在想」；星图连播常驻
+    LaunchedEffect(listenerOn, now?.songId, tick) { if (listenerOn) Buddy.think() }
+    LaunchedEffect(Unit) { Buddy.runQueue(ctx.applicationContext) }
+
     BackHandler(enabled = tab != 0) { tab = 0 }
 
     Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(a, b, c), start = Offset.Zero, end = Offset.Infinite))) {
@@ -94,8 +99,9 @@ fun App() {
         val m = Mood(a, b, c, accent)
         Crossfade(targetState = tab, animationSpec = tween(260), label = "tab") { t ->
             when (t) {
-                0 -> NowScreen(now, m, time)
-                1 -> LibraryScreen(lib, now, accent, time)
+                0 -> MomentScreen(now, accent, time, onOpenPlayer = { tab = 1 }, onOpenSettings = { tab = 3 })
+                1 -> NowScreen(now, m, time)
+                2 -> LibraryScreen(lib, now, accent, time)
                 else -> SettingsPage()
             }
         }
@@ -106,11 +112,11 @@ fun App() {
 @Composable
 private fun Dock(tab: Int, modifier: Modifier, onTab: (Int) -> Unit) {
     Row(modifier.navigationBarsPadding().padding(bottom = 14.dp).glass(999.dp, 14.dp).padding(5.dp)) {
-        listOf("播放", "曲库", "设置").forEachIndexed { i, label ->
+        listOf("此刻", "播放", "曲库", "设置").forEachIndexed { i, label ->
             val sel = i == tab
             Box(
                 Modifier.clip(RoundedCornerShape(999.dp)).background(if (sel) Color.White else Color.Transparent)
-                    .clickable { onTab(i) }.padding(horizontal = 24.dp, vertical = 11.dp),
+                    .clickable { onTab(i) }.padding(horizontal = 19.dp, vertical = 11.dp),
             ) {
                 Text(label, fontSize = 14.sp, color = if (sel) Wg.ink else Wg.ink2, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
             }

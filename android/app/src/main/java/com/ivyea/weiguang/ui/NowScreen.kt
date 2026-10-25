@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -63,16 +64,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.R
+import com.ivyea.weiguang.core.Buddy
 import com.ivyea.weiguang.core.Ncm
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
 import com.ivyea.weiguang.core.Prefs
 import com.ivyea.weiguang.core.Spectrum
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var sheetLine by remember { mutableStateOf<String?>(null) }
+    var sheetText by remember { mutableStateOf<String?>(null) }
+    val onExplain: (String) -> Unit = { line ->
+        sheetLine = line; sheetText = null
+        scope.launch { sheetText = Buddy.explain(line) }
+    }
     val bands = Spectrum.bands.collectAsState()
     var granted by remember { mutableStateOf(Spectrum.granted(ctx)) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -80,6 +90,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         if (ok) { Prefs.spectrum = true; Spectrum.start(ctx) }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp).padding(bottom = 92.dp),
     ) {
@@ -111,17 +122,40 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
             now.artist, fontSize = 14.sp, color = Wg.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         )
-        // 网易云实时报的当前这句歌词
+        // 网易云实时报的当前这句歌词；点一下让微光解读
         Crossfade(targetState = now.lyric ?: "", animationSpec = tween(450), label = "lyric", modifier = Modifier.fillMaxWidth().padding(top = 18.dp).height(30.dp)) { line ->
             Text(
                 line, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = mood.accent,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clickable(enabled = Buddy.isLyric(line)) { onExplain(line) },
             )
         }
-        Spacer(Modifier.height(14.dp))
+        Box(Modifier.fillMaxWidth().height(26.dp), contentAlignment = Alignment.Center) {
+            if (Buddy.isLyric(now.lyric)) {
+                Text("✦ 解读这句", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable { onExplain(now.lyric!!) }.padding(horizontal = 10.dp, vertical = 4.dp))
+            }
+        }
         Progress(now, mood.accent)
         Spacer(Modifier.height(10.dp))
         Controls(now, mood.accent) { Ncm.openApp(ctx) }
+    }
+    sheetLine?.let { line ->
+        Box(
+            Modifier.fillMaxSize().background(Color(0x33342F55)).clickable { sheetLine = null },
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 104.dp).glass(24.dp, 16.dp)
+                    .background(Color.White.copy(alpha = 0.6f)).clickable(enabled = false) {}.padding(20.dp),
+            ) {
+                Text("「$line」", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = mood.accent, lineHeight = 24.sp)
+                Text(
+                    sheetText ?: "微光在想…", fontSize = 14.sp, color = if (sheetText == null) Wg.ink3 else Wg.ink, lineHeight = 22.sp,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        }
+    }
     }
 }
 

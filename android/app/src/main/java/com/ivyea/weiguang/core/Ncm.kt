@@ -28,6 +28,12 @@ object Ncm {
     // 按 ID 打开会直接开始播放（会切到网易云）
     fun playSong(ctx: Context, id: Long): Boolean = open(ctx, "orpheus://song/$id")
 
+    // 歌单 mediaId 形如 playlist_id_385848799；打开歌单页，用户点「播放全部」后队列会把整张歌单报给微光
+    fun openPlaylist(ctx: Context, mediaId: String): Boolean {
+        val id = Regex("(\\d+)$").find(mediaId)?.value ?: return false
+        return open(ctx, "orpheus://playlist/$id")
+    }
+
     // 按关键词点歌网易云不支持，只能打开它的搜索页让用户点
     fun search(ctx: Context, q: String): Boolean = open(ctx, "orpheus://search?keyword=" + Uri.encode(q))
 

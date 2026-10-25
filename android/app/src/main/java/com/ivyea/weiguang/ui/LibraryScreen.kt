@@ -114,7 +114,7 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
     ) {
         if (pl != null) {
-            item { PlaylistHeader(pl, plSongs.size) { openPl = null } }
+            item { PlaylistHeader(pl, plSongs.size, accent, { openPl = null }) { Ncm.openPlaylist(ctx, pl.id) } }
             items(plSongs, key = { "p${it.id}" }) { SongRow(it, now, accent, null) { play(it) } }
             return@LazyColumn
         }
@@ -161,7 +161,9 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
         }
 
         item { Tabs(tab, accent) { tab = it } }
-        if (tab == 0) {
+        if (tab == 2) {
+            item { StarMap(lib, now, accent, time) }
+        } else if (tab == 0) {
             if (lib.playlists.isEmpty()) item { Quiet("还没有歌单，点右上角同步") }
             else items(lib.playlists.chunked(2), key = { row -> row.joinToString { it.id } }) { row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -260,7 +262,7 @@ private fun SearchBox(q: String, onChange: (String) -> Unit) {
 @Composable
 private fun Tabs(tab: Int, accent: Color, onTab: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 14.dp)) {
-        listOf("歌单", "听过").forEachIndexed { i, label ->
+        listOf("歌单", "听过", "星图").forEachIndexed { i, label ->
             val sel = i == tab
             Column(
                 Modifier.padding(end = 26.dp).clickable { onTab(i) },
@@ -289,7 +291,7 @@ private fun PlaylistCard(p: Playlist, modifier: Modifier, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PlaylistHeader(p: Playlist, count: Int, onBack: () -> Unit) {
+private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () -> Unit, onPlayAll: () -> Unit) {
     val (c1, c2) = tileOf(p.name)
     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Text("‹ 曲库", fontSize = 14.sp, color = Wg.ink2, modifier = Modifier.clickable(onClick = onBack).padding(vertical = 6.dp))
@@ -301,6 +303,17 @@ private fun PlaylistHeader(p: Playlist, count: Int, onBack: () -> Unit) {
                 Text(p.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("$count 首", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(top = 4.dp))
             }
+        }
+        Text(
+            "在网易云打开这个歌单", fontSize = 13.sp, color = Color.White,
+            modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(999.dp)).background(accent)
+                .clickable(onClick = onPlayAll).padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        if (count in 1..12) {
+            Text(
+                "网易云只给微光看前几首。在网易云里点「播放全部」一次，微光就能从播放队列补全整个歌单。",
+                fontSize = 12.sp, color = Wg.ink3, lineHeight = 18.sp, modifier = Modifier.padding(top = 10.dp),
+            )
         }
     }
 }

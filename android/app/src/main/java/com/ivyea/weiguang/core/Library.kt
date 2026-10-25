@@ -18,7 +18,8 @@ import java.io.File
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
-data class Song(val id: Long, val title: String, val artist: String)
+// v=情绪明亮度、e=能量（0~1，AI 打的标签，没打过就是 null）
+data class Song(val id: Long, val title: String, val artist: String, val v: Float? = null, val e: Float? = null)
 data class Playlist(val id: String, val name: String, val songIds: List<Long>)
 data class Played(val id: Long, val at: Long, val count: Int)
 
@@ -29,6 +30,7 @@ data class LibState(
     val syncedAt: Long = 0L,
     val syncing: Boolean = false,
     val syncMsg: String = "",
+    val syncLog: String = "",
 )
 
 // 本机曲库索引：从网易云车机浏览服务读歌单 + 自己记的听歌记录。只存 ID、歌名、歌手
@@ -54,11 +56,43 @@ object Library {
         lastPlayed = id
         val s = _state.value
         val songs = s.songs.toMutableMap()
-        songs[id] = Song(id, title, artist.ifEmpty { s.songs[id]?.artist ?: "" })
+        songs[id] = (s.songs[id] ?: Song(id, title, artist)).copy(title = title, artist = artist.ifEmpty { s.songs[id]?.artist ?: "" })
         val old = s.history.firstOrNull { it.id == id }
         val history = listOf(Played(id, System.currentTimeMillis(), (old?.count ?: 0) + 1)) +
             s.history.filter { it.id != id }.take(999)
         _state.value = s.copy(songs = songs, history = history)
+        save()
+    }
+
+    // 网易云的播放队列：把里面的歌补进曲库；队列名和某个歌单同名且更全时，顺便补全这个歌单
+    // （车机接口每个歌单只给前 12 首，在网易云里播一次歌单就能补全）
+    fun absorbQueue(title: String?, items: List<Triple<Long, String, String>>) {
+        if (file == null || items.isEmpty()) return
+        val s = _state.value
+        val songs = s.songs.toMutableMap()
+        var changed = false
+        for ((id, t, a) in items) {
+            val old = songs[id]
+            if (old == null || (old.title.isEmpty() && t.isNotEmpty())) {
+                songs[id] = (old ?: Song(id, t, a)).copy(title = t.ifEmpty { old?.title ?: "" }, artist = a.ifEmpty { old?.artist ?: "" })
+                changed = true
+            }
+        }
+        val ids = items.map { it.first }
+        val playlists = s.playlists.map { p ->
+            if (!title.isNullOrBlank() && p.name == title.trim() && ids.size > p.songIds.size) { changed = true; p.copy(songIds = ids) } else p
+        }
+        if (!changed) return
+        _state.value = s.copy(songs = songs, playlists = playlists)
+        save()
+    }
+
+    fun setMoods(m: Map<Long, Pair<Float, Float>>) {
+        if (m.isEmpty()) return
+        val s = _state.value
+        val songs = s.songs.toMutableMap()
+        for ((id, ve) in m) songs[id]?.let { songs[id] = it.copy(v = ve.first.coerceIn(0f, 1f), e = ve.second.coerceIn(0f, 1f)) }
+        _state.value = s.copy(songs = songs)
         save()
     }
 
@@ -83,6 +117,7 @@ object Library {
             val lists = all(b, mine.mediaId!!).filter { it.isBrowsable && it.mediaId != null }
             val songs = _state.value.songs.toMutableMap()
             val playlists = ArrayList<Playlist>()
+            val log = StringBuilder()
             lists.forEachIndexed { i, pl ->
                 val name = pl.description.title?.toString() ?: "歌单"
                 set { it.copy(syncMsg = "读取歌单 ${i + 1}/${lists.size} · $name") }
@@ -91,12 +126,17 @@ object Library {
                     if (!item.isPlayable) continue
                     val id = Ncm.songIdOf(item.mediaId) ?: continue
                     val artist = item.description.subtitle?.toString()?.takeIf { it.isNotBlank() } ?: songs[id]?.artist ?: ""
-                    songs[id] = Song(id, item.description.title?.toString() ?: songs[id]?.title ?: "", artist)
+                    val title = item.description.title?.toString() ?: songs[id]?.title ?: ""
+                    songs[id] = (songs[id] ?: Song(id, title, artist)).copy(title = title, artist = artist)
                     ids += id
                 }
-                playlists += Playlist(pl.mediaId!!, name, ids)
+                // 车机接口给得不全时，保留以前从播放队列补全的那份
+                val old = _state.value.playlists.firstOrNull { it.id == pl.mediaId }
+                val keep = if (old != null && old.songIds.size > ids.size) old.songIds else ids
+                playlists += Playlist(pl.mediaId!!, name, keep)
+                log.append(name).append("：接口给 ").append(ids.size).append(" 首").append(if (keep !== ids) "，保留补全的 ${keep.size} 首" else "").append('\n')
             }
-            set { it.copy(songs = songs, playlists = playlists, syncedAt = System.currentTimeMillis(), syncing = false, syncMsg = "") }
+            set { it.copy(songs = songs, playlists = playlists, syncedAt = System.currentTimeMillis(), syncing = false, syncMsg = "", syncLog = log.toString()) }
             save()
         } finally {
             try { b.disconnect() } catch (_: Throwable) {}
@@ -144,25 +184,34 @@ object Library {
         return out.values.toList()
     }
 
+    // 车机服务常常先回一个空列表、联网拿到后再推一次更新，所以拿到第一批后多等一会儿收后续更新
     private suspend fun page(b: MediaBrowser, id: String, page: Int, size: Int): List<MediaBrowser.MediaItem>? =
-        withTimeoutOrNull(12_000) {
+        withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<List<MediaBrowser.MediaItem>?> { cont ->
                 val opts = Bundle().apply {
                     putInt(MediaBrowser.EXTRA_PAGE, page)
                     putInt(MediaBrowser.EXTRA_PAGE_SIZE, size)
                 }
-                val cb = object : MediaBrowser.SubscriptionCallback() {
-                    fun done(list: List<MediaBrowser.MediaItem>?) {
-                        if (!cont.isActive) return
-                        val self = this
-                        // 回调里直接退订可能打乱它的分发，挪到下一拍
-                        main.post { try { b.unsubscribe(id, self) } catch (_: Throwable) {} }
-                        cont.resume(list)
-                    }
-                    override fun onChildrenLoaded(parentId: String, children: MutableList<MediaBrowser.MediaItem>) = done(children)
-                    override fun onChildrenLoaded(parentId: String, children: MutableList<MediaBrowser.MediaItem>, options: Bundle) = done(children)
-                    override fun onError(parentId: String) = done(null)
-                    override fun onError(parentId: String, options: Bundle) = done(null)
+                var best: List<MediaBrowser.MediaItem>? = null
+                var finishing = false
+                lateinit var cb: MediaBrowser.SubscriptionCallback
+                fun finish() {
+                    if (!cont.isActive) return
+                    // 回调里直接退订可能打乱它的分发，挪到下一拍
+                    main.post { try { b.unsubscribe(id, cb) } catch (_: Throwable) {} }
+                    cont.resume(best)
+                }
+                fun got(list: List<MediaBrowser.MediaItem>) {
+                    if (list.size >= (best?.size ?: -1)) best = list
+                    if (finishing) return
+                    finishing = true
+                    main.postDelayed({ finish() }, if (list.isEmpty()) 3500L else 1500L)
+                }
+                cb = object : MediaBrowser.SubscriptionCallback() {
+                    override fun onChildrenLoaded(parentId: String, children: MutableList<MediaBrowser.MediaItem>) = got(children)
+                    override fun onChildrenLoaded(parentId: String, children: MutableList<MediaBrowser.MediaItem>, options: Bundle) = got(children)
+                    override fun onError(parentId: String) = finish()
+                    override fun onError(parentId: String, options: Bundle) = finish()
                 }
                 b.subscribe(id, opts, cb)
             }
@@ -180,7 +229,9 @@ object Library {
                 for (i in 0 until a.length()) {
                     val s = a.getJSONObject(i)
                     val id = s.getLong("id")
-                    songs[id] = Song(id, s.optString("t"), s.optString("a"))
+                    val v = if (s.has("v")) s.optDouble("v").toFloat() else null
+                    val e = if (s.has("e")) s.optDouble("e").toFloat() else null
+                    songs[id] = Song(id, s.optString("t"), s.optString("a"), v, e)
                 }
             }
             val playlists = ArrayList<Playlist>()
@@ -212,7 +263,9 @@ object Library {
         o.put("v", 1)
         o.put("syncedAt", s.syncedAt)
         o.put("songs", JSONArray().apply {
-            for (song in s.songs.values) put(JSONObject().put("id", song.id).put("t", song.title).put("a", song.artist))
+            for (song in s.songs.values) put(JSONObject().put("id", song.id).put("t", song.title).put("a", song.artist).apply {
+                if (song.v != null && song.e != null) { put("v", song.v.toDouble()); put("e", song.e.toDouble()) }
+            })
         })
         o.put("playlists", JSONArray().apply {
             for (p in s.playlists) put(JSONObject().put("id", p.id).put("n", p.name).put("s", JSONArray(p.songIds)))
