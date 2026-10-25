@@ -142,6 +142,7 @@ class MainActivity : Activity() {
         root.addView(uriEdit)
         row(btn("D2 歌曲链接") { testD("D2", "orpheus://song/$SONG_ID", "起风了") },
             btn("D3 网页歌曲") { testD("D3", "https://music.163.com/song?id=$SONG_ID", "起风了") })
+        row(btn("D6 歌曲链接+自动跳回") { testD6() })
         row(btn("D4 手机网页") { testD("D4", "https://y.music.163.com/m/song?id=$SONG_ID", "起风了") },
             btn("D5 打开上面填的链接") { testD("D5", uriEdit.text.toString().trim(), query()) })
         root.addView(text("E · 按 ID 播放，不跳进网易云", 13f, 0xFF75738F.toInt()).apply { setPadding(0, dp(10), 0, 0) })
@@ -465,6 +466,37 @@ class MainActivity : Activity() {
             val before = title(ncm())
             try { startActivity(i) } catch (e: Throwable) { return@freshStart result("$key 链接", "❌ 打开出错 ${e.message}") }
             verifyLater("$key 链接", before, want)
+        }
+    }
+
+    // D6：打开歌曲链接让网易云播放，2 秒后自己切回前台（安卓 10 起限制后台抢前台，要实测）
+    private var resumedAt = 0L
+
+    override fun onResume() {
+        super.onResume()
+        resumedAt = System.currentTimeMillis()
+    }
+
+    private fun testD6() {
+        if (!guard()) return
+        val i = Intent(Intent.ACTION_VIEW, Uri.parse("orpheus://song/$SONG_ID")).setPackage(NCM).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        freshStart("起风了") {
+            val before = title(ncm())
+            val launched = System.currentTimeMillis()
+            try { startActivity(i) } catch (e: Throwable) { return@freshStart result("D6 链接+跳回", "❌ 打开出错 ${e.message}") }
+            log("D6 已打开歌曲链接，2 秒后尝试切回微光，别手动切回来")
+            ui.postDelayed({
+                try {
+                    startActivity(Intent(this, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                } catch (e: Throwable) { log("D6 切回出错 ${e.message}") }
+            }, 2000)
+            ui.postDelayed({
+                val now = title(ncm())
+                val song = if (now.contains("起风了") && now != before) "歌 ✅ 放上了" else "歌 ❌ 没放上（$now）"
+                val back = if (resumedAt > launched + 1500) "跳回 ✅ 自动回到了微光" else "跳回 ❌ 没能自己回来（被系统拦了）"
+                result("D6 链接+跳回", "$song · $back")
+            }, 6000)
         }
     }
 
