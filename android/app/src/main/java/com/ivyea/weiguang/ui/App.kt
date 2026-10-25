@@ -82,6 +82,7 @@ fun App() {
         if (!listenerOn) return@LaunchedEffect
         NowPlaying.attach(ctx)
         if (Ncm.version(ctx) != null && System.currentTimeMillis() - Library.state.value.syncedAt > AUTO_SYNC_MS) Library.sync(ctx)
+        else Library.fillCovers()
     }
 
     // 换歌、换时段时更新「微光在想」；星图连播常驻

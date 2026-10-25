@@ -141,7 +141,7 @@ fun SettingsPage() {
             }
         }
         Text(
-            "微光只读取网易云的播放信息和你的歌单，存在这台手机里。用 AI 时，只把歌名、歌手和你说的话发给你填的 AI 服务。",
+            "微光只读取网易云的播放信息和你的歌单，存在这台手机里。歌词和封面按歌曲 ID 向网易云公开接口查询，不带账号。用 AI 时，只把歌名、歌手和你说的话发给你填的 AI 服务。",
             fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 18.dp, start = 4.dp),
         )
     }

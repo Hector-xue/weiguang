@@ -15,7 +15,8 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = build
-        versionName = "0.1.0-dev.$build"
+        // 打 tag 发正式版时 CI 传 WG_VERSION（如 0.1.0），平时是开发版号
+        versionName = System.getenv("WG_VERSION")?.takeIf { it.isNotBlank() } ?: "0.1.0-dev.$build"
     }
 
     // 正式签名只在 CI 里由仓库密钥还原（ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD）

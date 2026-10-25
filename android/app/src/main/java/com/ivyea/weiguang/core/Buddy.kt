@@ -8,6 +8,20 @@ import java.util.Calendar
 
 data class Msg(val me: Boolean, val text: String, val songs: List<Long> = emptyList())
 
+// 一种心情在星图上的位置；to 不为空表示「带我走出来」：从这里慢慢走到 to
+data class Feel(val name: String, val say: String, val v: Float, val e: Float, val reply: String, val to: Pair<Float, Float>? = null)
+
+val Feels = listOf(
+    Feel("低落", "有点低落", 0.2f, 0.25f, "先陪你待一会儿，再慢慢亮起来：", 0.72f to 0.5f),
+    Feel("疲惫", "好累", 0.4f, 0.12f, "不吵你，一点点把精神找回来：", 0.62f to 0.42f),
+    Feel("烦躁", "心里很烦", 0.3f, 0.8f, "先顺着这股劲，再一点点静下来：", 0.55f to 0.2f),
+    Feel("想哭", "想哭", 0.12f, 0.15f, "想哭就哭一会儿，我在："),
+    Feel("平静", "挺平静的", 0.55f, 0.2f, "那就安安静静的："),
+    Feel("专注", "要专心做事", 0.5f, 0.35f, "不打扰你，这些适合专心："),
+    Feel("开心", "心情不错", 0.85f, 0.65f, "好心情，接着亮下去："),
+    Feel("想燃", "想燃一下", 0.75f, 0.92f, "音量调大："),
+)
+
 // 微光这个"伙伴"：对话点歌、此刻的一句话、解读歌词、给歌打情绪标签、星图连播。
 // 选歌只从用户自己的曲库里挑（网易云按歌名点不了歌，只有曲库里的歌有 ID）
 object Buddy {
@@ -63,6 +77,88 @@ object Buddy {
         return ids.mapNotNull { s.songs[it] }.filter { it.title.isNotEmpty() }.take(limit)
     }
 
+    // 最常听的几位歌手
+    fun taste(n: Int = 6): List<String> {
+        val s = Library.state.value
+        val w = HashMap<String, Int>()
+        for (h in s.history) s.songs[h.id]?.artist?.split("/", "、", "&")?.map { it.trim() }?.filter { it.isNotEmpty() }?.forEach { w[it] = (w[it] ?: 0) + h.count }
+        return w.entries.sortedByDescending { it.value }.take(n).map { it.key }
+    }
+
+    // 这个点（前后一小时）你常听的歌：至少在两天里都听过
+    fun habit(n: Int = 3): List<Song> {
+        val s = Library.state.value
+        val c = Calendar.getInstance()
+        val hour = c.get(Calendar.HOUR_OF_DAY)
+        val days = HashMap<Long, HashSet<Int>>()
+        for (p in s.plays) {
+            c.timeInMillis = p.at
+            val d = (c.get(Calendar.HOUR_OF_DAY) - hour + 24) % 24
+            if (d <= 1 || d == 23) days.getOrPut(p.id) { HashSet() } += c.get(Calendar.YEAR) * 400 + c.get(Calendar.DAY_OF_YEAR)
+        }
+        return days.entries.filter { it.value.size >= 2 }.sortedByDescending { it.value.size }
+            .mapNotNull { s.songs[it.key] }.filter { it.title.isNotEmpty() }.take(n)
+    }
+
+    private fun profile(): String = buildString {
+        val t = taste()
+        if (t.isNotEmpty()) append("用户最常听的歌手：").append(t.joinToString("、")).append("。")
+        val h = habit(5)
+        if (h.isNotEmpty()) append("这个时段用户常听：").append(h.joinToString("、") { "《${it.title}》" }).append("。")
+    }
+
+    // ---------- 按心情找歌 ----------
+
+    suspend fun feel(f: Feel) {
+        if (_busy.value) return
+        _msgs.value = _msgs.value + Msg(true, f.say)
+        _busy.value = true
+        try {
+            val tagged = Library.state.value.songs.values.filter { it.v != null && it.e != null && it.title.isNotEmpty() }
+            val msg = when {
+                tagged.size >= 20 -> Msg(false, f.reply, walk(tagged, f))
+                Ai.ready -> askAi(
+                    "我现在${f.say}。" + (if (f.to != null) "先陪我待在这个情绪里，再一首首慢慢把我带出来。" else "陪着这个心情就好。") + "按播放顺序挑 8 首。",
+                    max = 8,
+                )
+                else -> {
+                    val picks = localPick(f.say)
+                    Msg(false, if (picks.isEmpty()) "曲库还是空的，先去「曲库」同步一下歌单吧。" else "先凭直觉挑几首。填上 AI 密钥、在星图里给歌打好标签，按心情找歌会准很多。", picks)
+                }
+            }
+            _msgs.value = _msgs.value + msg
+        } catch (e: Ai.AiError) {
+            _msgs.value = _msgs.value + Msg(false, "${e.message}。", localPick(f.say))
+        } finally {
+            _busy.value = false
+        }
+    }
+
+    // 在星图上走一条路：停留型就在这片星域里挑，带出来型从起点一步步走到终点，每一步取最近的没用过的歌
+    private fun walk(tagged: List<Song>, f: Feel, n: Int = 10): List<Long> {
+        val playing = NowPlaying.now.value?.songId
+        val used = HashSet<Long>().apply { playing?.let { add(it) } }
+        val out = ArrayList<Long>()
+        fun nearest(v: Float, e: Float): Song? = tagged.filter { it.id !in used }
+            .minByOrNull { (it.v!! - v) * (it.v - v) + (it.e!! - e) * (it.e - e) }
+        if (f.to == null) {
+            // 最近的 16 首里随机取 8 首，免得每次一模一样
+            val near = tagged.filter { it.id != playing }
+                .sortedBy { (it.v!! - f.v) * (it.v - f.v) + (it.e!! - f.e) * (it.e - f.e) }.take(16).shuffled().take(8)
+            return near.sortedBy { (it.v!! - f.v) * (it.v - f.v) + (it.e!! - f.e) * (it.e - f.e) }.map { it.id }
+        }
+        for (i in 0 until n) {
+            // 前三首停在原地，之后再走，像先接住、再带走
+            val k = ((i - 2).coerceAtLeast(0) / (n - 3f)).coerceIn(0f, 1f)
+            val v = f.v + (f.to.first - f.v) * k
+            val e = f.e + (f.to.second - f.e) * k
+            val s = nearest(v, e) ?: break
+            used += s.id
+            out += s.id
+        }
+        return out
+    }
+
     // ---------- 对话点歌 ----------
 
     suspend fun ask(text: String) {
@@ -80,16 +176,17 @@ object Buddy {
         }
     }
 
-    private suspend fun askAi(text: String): Msg {
+    private suspend fun askAi(text: String, max: Int = 5): Msg {
         val cand = candidates()
         val system = """
             你是「微光」，一个陪用户听歌的温柔伙伴，说话像朋友，简短自然。用户用网易云听歌。
             需要推荐歌时，只能从「候选歌曲」里挑，用它的 id，绝不编造列表外的歌。
-            只回复一个 JSON：{"reply":"一两句中文回应，不超过40字","songs":[按推荐顺序的 id，最多5个]}
+            只回复一个 JSON：{"reply":"一两句中文回应，不超过40字","songs":[按推荐顺序的 id，最多$max 个]}
+            结合用户的口味和习惯来挑，像一个了解他的老朋友。
             用户只是聊天、不需要歌时，songs 给空数组。候选里实在没有合适的，就在 reply 里坦白说，并建议去网易云搜什么。
         """.trimIndent()
         val user = buildString {
-            append("现在是").append(period()).append(' ').append(clock()).append("。").append(nowLine()).append('\n')
+            append("现在是").append(period()).append(' ').append(clock()).append("。").append(nowLine()).append(profile()).append('\n')
             append("候选歌曲（id|歌名|歌手）：\n")
             cand.forEach { append(it.id).append('|').append(it.title).append('|').append(it.artist).append('\n') }
             append("\n用户说：").append(text)
@@ -100,7 +197,7 @@ object Buddy {
         val known = Library.state.value.songs
         val ids = ArrayList<Long>()
         o.optJSONArray("songs")?.let { a -> for (i in 0 until a.length()) a.optLong(i).takeIf { it in known }?.let { ids += it } }
-        return Msg(false, o.optString("reply").ifBlank { "给你挑了这些：" }, ids.distinct().take(5))
+        return Msg(false, o.optString("reply").ifBlank { "给你挑了这些：" }, ids.distinct().take(max))
     }
 
     private fun askLocal(text: String): Msg {
@@ -147,7 +244,7 @@ object Buddy {
             val recent = Library.state.value.let { s -> s.history.take(5).mapNotNull { s.songs[it.id]?.title } }
             val line = Ai.chat(
                 "你是「微光」，陪用户听歌的温柔伙伴。根据时间和用户在听的歌，说一句自然的心里话，不超过26个字，不要引号，不要提问超过一次。",
-                "现在是${period()} ${clock()}。${nowLine()}最近听过：${recent.joinToString("、")}",
+                "现在是${period()} ${clock()}。${nowLine()}最近听过：${recent.joinToString("、")}。${profile()}",
                 maxTokens = 80, temperature = 1.0,
             )
             _thought.value = line.trim().trim('"', '“', '”', '「', '」').take(40)

@@ -65,6 +65,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.R
 import com.ivyea.weiguang.core.Buddy
+import com.ivyea.weiguang.core.Cloud
+import com.ivyea.weiguang.core.LrcLine
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import android.os.SystemClock
 import com.ivyea.weiguang.core.Ncm
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
@@ -79,10 +94,15 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
     val scope = rememberCoroutineScope()
     var sheetLine by remember { mutableStateOf<String?>(null) }
     var sheetText by remember { mutableStateOf<String?>(null) }
-    val onExplain: (String) -> Unit = { line ->
-        sheetLine = line; sheetText = null
+    var sheetAt by remember { mutableStateOf<Long?>(null) }
+    val onExplain: (String, Long?) -> Unit = { line, at ->
+        sheetLine = line; sheetText = null; sheetAt = at
         scope.launch { sheetText = Buddy.explain(line) }
     }
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
+    val lines = rememberLyrics(now?.songId)
+    val pos = rememberPosition(now)
+    val idx by remember(lines) { derivedStateOf { lines?.let { idxAt(it, pos.value) } ?: -1 } }
     val bands = Spectrum.bands.collectAsState()
     var granted by remember { mutableStateOf(Spectrum.granted(ctx)) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -99,40 +119,64 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
             EmptyNow(time)
             return@Column
         }
+        val cur = (if (idx >= 0) lines?.getOrNull(idx)?.text else null) ?: now.lyric?.takeIf { lines.isNullOrEmpty() }
+        val next = if (lines != null && idx + 1 in lines.indices) lines[idx + 1].text else null
+        val canLyrics = !lines.isNullOrEmpty()
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            SpectrumRing(Modifier.fillMaxSize(), bands, { Spectrum.live }, now.playing, mood.accent, time)
-            Cover(now.art, now.playing, mood.accent)
-            if (!granted && Prefs.spectrum) {
-                Text(
-                    "让粒子跟着音乐跳 →",
-                    fontSize = 12.sp, color = Wg.lav,
-                    modifier = Modifier.align(Alignment.BottomCenter).glass(999.dp, 4.dp)
-                        .clickable { ask.launch(Manifest.permission.RECORD_AUDIO) }
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                )
+            Crossfade(targetState = showLyrics && canLyrics, animationSpec = tween(500), label = "view", modifier = Modifier.fillMaxSize()) { full ->
+                if (full) {
+                    Box(Modifier.fillMaxSize()) {
+                        LyricsView(lines!!, idx, mood.accent, Modifier.fillMaxSize()) { l -> onExplain(l.text, l.t) }
+                        Text(
+                            "封面", fontSize = 12.sp, color = Wg.ink2,
+                            modifier = Modifier.align(Alignment.TopEnd).glass(999.dp, 2.dp).clickable { showLyrics = false }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        SpectrumRing(Modifier.fillMaxSize(), bands, { Spectrum.live }, now.playing, mood.accent, time)
+                        Cover(now.art, now.playing, mood.accent) { if (canLyrics) showLyrics = true }
+                        if (!granted && Prefs.spectrum) {
+                            Text(
+                                "让粒子跟着音乐跳 →",
+                                fontSize = 12.sp, color = Wg.lav,
+                                modifier = Modifier.align(Alignment.BottomCenter).glass(999.dp, 4.dp)
+                                    .clickable { ask.launch(Manifest.permission.RECORD_AUDIO) }
+                                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
         Text(
             now.title.ifEmpty { "未知歌曲" },
             fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink,
             maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
         Text(
             now.artist, fontSize = 14.sp, color = Wg.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         )
-        // 网易云实时报的当前这句歌词；点一下让微光解读
-        Crossfade(targetState = now.lyric ?: "", animationSpec = tween(450), label = "lyric", modifier = Modifier.fillMaxWidth().padding(top = 18.dp).height(30.dp)) { line ->
+        // 封面视图下给两行：当前这句 + 下一句；点当前句让微光解读，点下一句展开整首
+        if (!(showLyrics && canLyrics)) {
+            Crossfade(targetState = cur ?: "", animationSpec = tween(450), label = "lyric", modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(28.dp)) { line ->
+                Text(
+                    line, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = mood.accent,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = Buddy.isLyric(line)) { onExplain(line, lines?.getOrNull(idx)?.t) },
+                )
+            }
             Text(
-                line, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = mood.accent,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().clickable(enabled = Buddy.isLyric(line)) { onExplain(line) },
+                next ?: "", fontSize = 13.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().height(20.dp).clickable(enabled = canLyrics) { showLyrics = true },
             )
         }
-        Box(Modifier.fillMaxWidth().height(26.dp), contentAlignment = Alignment.Center) {
-            if (Buddy.isLyric(now.lyric)) {
-                Text("✦ 解读这句", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable { onExplain(now.lyric!!) }.padding(horizontal = 10.dp, vertical = 4.dp))
+        Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
+            if (Buddy.isLyric(cur)) {
+                Text("✦ 解读这句", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable { onExplain(cur!!, lines?.getOrNull(idx)?.t) }.padding(horizontal = 10.dp, vertical = 4.dp))
             }
         }
         Progress(now, mood.accent)
@@ -153,6 +197,13 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
                     sheetText ?: "微光在想…", fontSize = 14.sp, color = if (sheetText == null) Wg.ink3 else Wg.ink, lineHeight = 22.sp,
                     modifier = Modifier.padding(top = 12.dp),
                 )
+                sheetAt?.let { at ->
+                    Text(
+                        "从这句开始放", fontSize = 13.sp, color = mood.accent, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 14.dp).clip(RoundedCornerShape(999.dp)).background(mood.accent.copy(alpha = 0.12f))
+                            .clickable { NowPlaying.seekTo(at); sheetLine = null }.padding(horizontal = 14.dp, vertical = 7.dp),
+                    )
+                }
             }
         }
     }
@@ -181,7 +232,7 @@ private fun TopBar(now: Now?) {
 }
 
 @Composable
-private fun Cover(art: Bitmap?, playing: Boolean, accent: Color) {
+private fun Cover(art: Bitmap?, playing: Boolean, accent: Color, onClick: () -> Unit) {
     val angle = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(playing) {
         if (!playing) return@LaunchedEffect
@@ -197,6 +248,7 @@ private fun Cover(art: Bitmap?, playing: Boolean, accent: Color) {
             .shadow(28.dp, CircleShape, ambientColor = accent, spotColor = accent)
             .graphicsLayer { rotationZ = angle.floatValue }
             .clip(CircleShape)
+            .clickable(onClick = onClick)
             .background(Brush.sweepGradient(listOf(Color(0xFFC8C2F2), Color(0xFFF6C9B8), Color(0xFFFFE2A8), Color(0xFFA8D4F5), Color(0xFFC8C2F2))))
             .border(5.dp, Color.White.copy(alpha = 0.6f), CircleShape),
         contentAlignment = Alignment.Center,
@@ -303,5 +355,85 @@ private fun EmptyNow(time: State<Float>) {
             Text(if (installed) "打开网易云" else "去下载", color = Color.White, fontSize = 15.sp)
         }
         Spacer(Modifier.width(1.dp).height(60.dp))
+    }
+}
+
+// 整首歌词走网易云网页接口；拿不到（断网）隔几秒再试两次，还不行就只显示会话里报的当前这句
+@Composable
+private fun rememberLyrics(id: Long?): List<LrcLine>? = produceState<List<LrcLine>?>(null, id) {
+    value = null
+    if (id == null) return@produceState
+    repeat(3) {
+        Cloud.lyric(id)?.let { value = it; return@produceState }
+        delay(4000)
+    }
+}.value
+
+@Composable
+private fun rememberPosition(now: Now?): State<Long> = produceState(now?.positionNow() ?: 0L, now) {
+    if (now == null) return@produceState
+    while (true) { value = now.positionNow(); delay(120) }
+}
+
+// 最后一句开始时间 <= 当前进度的那句；稍微提前 250ms，跟耳朵对得上
+private fun idxAt(lines: List<LrcLine>, pos: Long): Int {
+    var lo = 0
+    var hi = lines.size - 1
+    var ans = -1
+    val p = pos + 250
+    while (lo <= hi) {
+        val mid = (lo + hi) / 2
+        if (lines[mid].t <= p) { ans = mid; lo = mid + 1 } else hi = mid - 1
+    }
+    return ans
+}
+
+// 滚动歌词：当前句居中放大；手指划过以后 3 秒内不抢着滚回去
+@Composable
+private fun LyricsView(lines: List<LrcLine>, idx: Int, accent: Color, modifier: Modifier, onTap: (LrcLine) -> Unit) {
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = idx.coerceAtLeast(0))
+    var userAt by remember { mutableLongStateOf(0L) }
+    var auto by remember { mutableStateOf(false) }
+    LaunchedEffect(list.isScrollInProgress) { if (list.isScrollInProgress && !auto) userAt = SystemClock.uptimeMillis() }
+    LaunchedEffect(idx) {
+        if (SystemClock.uptimeMillis() - userAt < 3000) return@LaunchedEffect
+        auto = true
+        try { list.animateScrollToItem(idx.coerceAtLeast(0)) } finally { auto = false }
+    }
+    BoxWithConstraints(modifier) {
+        val h = maxHeight
+        LazyColumn(
+            Modifier.fillMaxSize()
+                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black, 0.8f to Color.Black, 1f to Color.Transparent),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
+            state = list,
+            contentPadding = PaddingValues(top = h * 0.4f, bottom = h * 0.55f),
+        ) {
+            itemsIndexed(lines) { i, l ->
+                val on = i == idx
+                val near = kotlin.math.abs(i - idx) <= 2
+                val scale by animateFloatAsState(if (on) 1f else 0.86f, tween(380), label = "s")
+                val alpha by animateFloatAsState(if (on) 1f else if (near) 0.5f else 0.28f, tween(380), label = "a")
+                Column(
+                    Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
+                        .clip(RoundedCornerShape(14.dp)).clickable { onTap(l) }.padding(horizontal = 8.dp, vertical = 9.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        l.text, fontSize = 19.sp, lineHeight = 27.sp, textAlign = TextAlign.Center,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, color = if (on) accent else Wg.ink,
+                    )
+                    l.tr?.let {
+                        Text(it, fontSize = 13.sp, lineHeight = 19.sp, textAlign = TextAlign.Center, color = if (on) accent.copy(alpha = 0.8f) else Wg.ink2, modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+            }
+        }
     }
 }

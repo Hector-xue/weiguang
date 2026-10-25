@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
         )
         Prefs.init(this)
         Library.init(this)
+        com.ivyea.weiguang.core.Art.init(this)
         setContent { WeiguangTheme { App() } }
     }
 

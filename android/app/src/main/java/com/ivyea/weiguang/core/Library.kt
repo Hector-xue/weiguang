@@ -18,15 +18,18 @@ import java.io.File
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
-// v=情绪明亮度、e=能量（0~1，AI 打的标签，没打过就是 null）
-data class Song(val id: Long, val title: String, val artist: String, val v: Float? = null, val e: Float? = null)
+// v=情绪明亮度、e=能量（0~1，AI 打的标签，没打过就是 null）；pic=专辑封面地址（null 没查过，"" 查过没有）
+data class Song(val id: Long, val title: String, val artist: String, val v: Float? = null, val e: Float? = null, val pic: String? = null)
 data class Playlist(val id: String, val name: String, val songIds: List<Long>)
 data class Played(val id: Long, val at: Long, val count: Int)
+// 每一次播放的流水，用来学「这个点你常听什么」
+data class Play(val id: Long, val at: Long)
 
 data class LibState(
     val songs: Map<Long, Song> = emptyMap(),
     val playlists: List<Playlist> = emptyList(),
     val history: List<Played> = emptyList(),
+    val plays: List<Play> = emptyList(),
     val syncedAt: Long = 0L,
     val syncing: Boolean = false,
     val syncMsg: String = "",
@@ -58,10 +61,40 @@ object Library {
         val songs = s.songs.toMutableMap()
         songs[id] = (s.songs[id] ?: Song(id, title, artist)).copy(title = title, artist = artist.ifEmpty { s.songs[id]?.artist ?: "" })
         val old = s.history.firstOrNull { it.id == id }
-        val history = listOf(Played(id, System.currentTimeMillis(), (old?.count ?: 0) + 1)) +
+        val nowMs = System.currentTimeMillis()
+        val history = listOf(Played(id, nowMs, (old?.count ?: 0) + 1)) +
             s.history.filter { it.id != id }.take(999)
-        _state.value = s.copy(songs = songs, history = history)
+        _state.value = s.copy(songs = songs, history = history, plays = (s.plays + Play(id, nowMs)).takeLast(3000))
         save()
+    }
+
+    // 歌单封面 = 第一首有封面的歌
+    fun coverOf(p: Playlist): String? {
+        val songs = _state.value.songs
+        return p.songIds.asSequence().take(30).mapNotNull { songs[it]?.pic?.takeIf { u -> u.isNotEmpty() } }.firstOrNull()
+    }
+
+    // 给没查过封面的歌补上封面地址：先每个歌单的前几首，再听过的，再其余
+    private var filling = false
+    suspend fun fillCovers() {
+        if (file == null || filling) return
+        filling = true
+        try {
+            val s0 = _state.value
+            val order = LinkedHashSet<Long>()
+            s0.playlists.forEach { p -> p.songIds.take(3).forEach { order += it } }
+            s0.history.forEach { order += it.id }
+            s0.playlists.forEach { p -> order += p.songIds }
+            val todo = order.filter { s0.songs[it]?.pic == null }.take(2000)
+            for (batch in todo.chunked(100)) {
+                val got = Cloud.covers(batch) ?: break
+                val s = _state.value
+                val songs = s.songs.toMutableMap()
+                for (id in batch) songs[id]?.let { songs[id] = it.copy(pic = got[id] ?: "") }
+                _state.value = s.copy(songs = songs)
+            }
+            if (todo.isNotEmpty()) save()
+        } finally { filling = false }
     }
 
     // 网易云的播放队列：把里面的歌补进曲库；队列名和某个歌单同名且更全时，顺便补全这个歌单
@@ -142,6 +175,7 @@ object Library {
             try { b.disconnect() } catch (_: Throwable) {}
             if (_state.value.syncing) set { it.copy(syncing = false) }
         }
+        fillCovers()
     }
 
     private inline fun set(f: (LibState) -> LibState) { _state.value = f(_state.value) }
@@ -231,7 +265,7 @@ object Library {
                     val id = s.getLong("id")
                     val v = if (s.has("v")) s.optDouble("v").toFloat() else null
                     val e = if (s.has("e")) s.optDouble("e").toFloat() else null
-                    songs[id] = Song(id, s.optString("t"), s.optString("a"), v, e)
+                    songs[id] = Song(id, s.optString("t"), s.optString("a"), v, e, if (s.has("p")) s.optString("p") else null)
                 }
             }
             val playlists = ArrayList<Playlist>()
@@ -250,7 +284,14 @@ object Library {
                     history += Played(h.getLong("id"), h.optLong("at"), h.optInt("n", 1))
                 }
             }
-            _state.value = LibState(songs, playlists, history, o.optLong("syncedAt"))
+            val plays = ArrayList<Play>()
+            o.optJSONArray("plays")?.let { a ->
+                for (i in 0 until a.length()) {
+                    val p = a.getJSONArray(i)
+                    plays += Play(p.getLong(0), p.getLong(1))
+                }
+            }
+            _state.value = LibState(songs, playlists, history, plays, o.optLong("syncedAt"))
         } catch (_: Throwable) {
             // 文件坏了就当没有，下次同步重建
         }
@@ -265,6 +306,7 @@ object Library {
         o.put("songs", JSONArray().apply {
             for (song in s.songs.values) put(JSONObject().put("id", song.id).put("t", song.title).put("a", song.artist).apply {
                 if (song.v != null && song.e != null) { put("v", song.v.toDouble()); put("e", song.e.toDouble()) }
+                if (song.pic != null) put("p", song.pic)
             })
         })
         o.put("playlists", JSONArray().apply {
@@ -273,6 +315,7 @@ object Library {
         o.put("history", JSONArray().apply {
             for (h in s.history) put(JSONObject().put("id", h.id).put("at", h.at).put("n", h.count))
         })
+        o.put("plays", JSONArray().apply { for (p in s.plays) put(JSONArray().put(p.id).put(p.at)) })
         val text = o.toString()
         io.execute {
             try {

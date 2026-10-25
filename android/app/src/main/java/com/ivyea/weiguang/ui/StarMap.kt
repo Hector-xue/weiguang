@@ -55,7 +55,9 @@ import kotlin.math.sin
 private val cool = Color(0xFF8FA8E8)
 private val hot = Color(0xFFF29A72)
 
-private fun starColor(s: Song): Color = lerp(lerp(cool, Color(0xFFB088E0), s.e ?: 0.5f), lerp(Color(0xFF9FD0C0), hot, s.e ?: 0.5f), s.v ?: 0.5f)
+fun feelColor(v: Float, e: Float): Color = lerp(lerp(cool, Color(0xFFB088E0), e), lerp(Color(0xFF9FD0C0), hot, e), v)
+
+private fun starColor(s: Song): Color = feelColor(s.v ?: 0.5f, s.e ?: 0.5f)
 
 // 情绪星图：横轴明亮、纵轴能量。点星星放这首；手指画一条线，线经过的歌按顺序连成歌单
 @Composable

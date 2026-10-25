@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>微光 · 会陪你听歌的播放器</title>
-<meta name="description" content="微光 Lumen：开源的安卓 AI 音乐播放器。一个懂你此刻、也懂你曲库的听歌伙伴。">
-<meta property="og:title" content="微光 · 会陪你听歌的播放器">
-<meta property="og:description" content="开源的安卓 AI 音乐播放器">
+<title>微光 · 懂你此刻的听歌伙伴</title>
+<meta name="description" content="微光 Lumen：开源免费的安卓 AI 听歌伙伴。曲库还是你的网易云，微光按心情排歌、记得你的习惯、陪你读歌词。">
+<meta property="og:title" content="微光 · 懂你此刻的听歌伙伴">
+<meta property="og:description" content="曲库还是你的网易云，微光负责懂你。开源免费的安卓 App。">
 <meta property="og:image" content="https://wg.ivyea.com/og.png">
 <meta name="theme-color" content="#f3eef8">
 <link rel="icon" href="favicon.png" type="image/png">
@@ -14,469 +14,749 @@
 <style>
 :root{
   --ink:#34324d; --ink2:#75738f; --ink3:#a6a4bb; --line:rgba(80,70,140,.10);
-  --warm:#ee8f6a; --warm2:#ffcf8a; --lav:#8f86e0;
-  --glass:rgba(255,255,255,.5); --glass-line:rgba(255,255,255,.8);
+  --warm:#ee8f6a; --warm2:#ffcf8a; --lav:#8f86e0; --ok:#6cc89a;
+  --glass:rgba(255,255,255,.52); --glass-line:rgba(255,255,255,.85);
+  --ease:cubic-bezier(.2,.75,.2,1); --spring:cubic-bezier(.34,1.4,.5,1);
   --font:"PingFang SC","HarmonyOS Sans SC","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;scroll-padding-top:84px}
 body{font-family:var(--font);color:var(--ink);background:#f6f2f8;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
 
-/* 背景氛围 */
-.sky{position:fixed;inset:0;z-index:-2;background:
-  radial-gradient(60vw 50vw at 12% 8%,#dcd8fa 0,transparent 70%),
-  radial-gradient(55vw 45vw at 92% 30%,#ffe2cf 0,transparent 70%),
-  radial-gradient(60vw 50vw at 30% 95%,#d6e8fb 0,transparent 70%),#f6f2f8}
-#dust{position:fixed;inset:0;z-index:-1;pointer-events:none;width:100%;height:100%}
+/* ───── 背景：三团慢慢漂的光 + 微尘 + 跟着指针的柔光 ───── */
+.sky{position:fixed;inset:0;z-index:-3;background:#f6f2f8;overflow:hidden}
+.sky i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.75;animation:drift 26s ease-in-out infinite}
+.sky i:nth-child(1){width:62vw;height:52vw;left:-14vw;top:-16vw;background:#dcd8fa}
+.sky i:nth-child(2){width:52vw;height:44vw;right:-14vw;top:18vh;background:#ffe2cf;animation-delay:-9s}
+.sky i:nth-child(3){width:58vw;height:48vw;left:16vw;bottom:-26vw;background:#d6e8fb;animation-delay:-17s}
+@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(4vw,-3vw) scale(1.06)}66%{transform:translate(-3vw,2vw) scale(.96)}}
+#dust{position:fixed;inset:0;z-index:-2;pointer-events:none;width:100%;height:100%}
+.glow{position:fixed;z-index:-1;left:0;top:0;width:520px;height:520px;margin:-260px 0 0 -260px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,214,180,.42),rgba(200,190,250,.18) 45%,transparent 70%);transform:translate3d(-999px,-999px,0);transition:opacity .6s}
 
-/* 顶栏 */
-header{position:fixed;top:0;left:0;right:0;z-index:20;transition:background .3s,box-shadow .3s}
-header.on{background:rgba(250,247,252,.72);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);box-shadow:0 1px 0 var(--line)}
-.nav{height:64px;display:flex;align-items:center;justify-content:space-between}
-.logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600}
-.logo img{width:28px;height:28px;border-radius:50%;box-shadow:0 0 14px rgba(255,170,120,.55)}
-.logo small{font-weight:400;color:var(--ink3);font-size:13px}
-.links{display:flex;align-items:center;gap:28px;font-size:14px;color:var(--ink2)}
-.links a:hover{color:var(--ink)}
-.gh{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:#fff;color:var(--ink);box-shadow:0 2px 12px rgba(100,80,160,.10)}
-.gh svg{width:16px;height:16px}
+/* ───── 顶栏：页首和首屏融成一片；下滑后收成居中的玻璃胶囊，链接下面有一颗跟着走的光 ───── */
+.nav{position:sticky;top:0;z-index:30;padding:12px max(16px,4vw)}
+.nav::before{content:"";position:absolute;left:0;right:0;top:0;height:calc(100% + 40px);pointer-events:none;
+  background:linear-gradient(180deg,rgba(246,242,248,.9) 0%,rgba(246,242,248,.5) 55%,rgba(246,242,248,0) 100%);opacity:0;transition:opacity .45s ease}
+.nav.scrolled::before{opacity:1}
+.nav-inner{position:relative;max-width:1120px;margin:0 auto;display:flex;align-items:center;gap:22px;padding:7px 7px 7px 16px;border-radius:999px;
+  background:rgba(255,255,255,0);border:1px solid rgba(255,255,255,0);
+  transition:max-width .6s var(--ease),background .4s ease,border-color .4s ease,box-shadow .4s ease,transform .6s var(--ease)}
+.nav.scrolled .nav-inner{max-width:880px;background:rgba(255,255,255,.66);border-color:rgba(255,255,255,.9);
+  box-shadow:0 12px 36px rgba(90,70,150,.10),0 1px 2px rgba(90,70,150,.05);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px;flex:none}
+.brand img{width:30px;height:30px;border-radius:50%;box-shadow:0 0 16px rgba(255,170,120,.55);transition:transform .8s var(--spring)}
+.brand:hover img{transform:rotate(200deg) scale(1.08)}
+.brand em{font-style:normal;color:var(--ink3);font-weight:400;font-size:13px}
+.links{position:relative;display:flex;margin-left:auto;font-size:14px;color:var(--ink2)}
+.links a{position:relative;z-index:1;padding:8px 14px;border-radius:999px;transition:color .25s}
+.links a.on,.links a:hover{color:var(--ink)}
+.pill{position:absolute;z-index:0;top:0;height:100%;left:0;width:0;border-radius:999px;background:#fff;opacity:0;
+  box-shadow:0 4px 14px rgba(120,100,180,.14),inset 0 0 0 1px rgba(255,255,255,.9);
+  transition:left .5s var(--spring),width .5s var(--spring),opacity .3s ease}
+.pill::after{content:"";position:absolute;left:50%;bottom:3px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--warm);box-shadow:0 0 8px var(--warm)}
+.gh-link{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:999px;color:var(--ink2);transition:color .2s,background .2s;flex:none}
+.gh-link:hover{color:var(--ink);background:rgba(255,255,255,.7)}
+.gh-link svg{width:19px;height:19px}
 
-/* 首屏 */
-.hero{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:96px 0 56px}
-#orb{width:min(560px,100vw);height:min(500px,92vw);cursor:pointer;touch-action:manipulation;margin:-10px 0 -6px}
-.state{height:20px;font-size:13px;color:var(--ink2);letter-spacing:.08em;display:flex;align-items:center;justify-content:center;gap:8px}
-.state b{width:6px;height:6px;border-radius:50%;background:var(--warm);box-shadow:0 0 8px var(--warm);transition:background .6s,box-shadow .6s}
+/* ───── 按钮 ───── */
+.btn{position:relative;display:inline-flex;align-items:center;gap:9px;height:48px;padding:0 24px;border-radius:999px;font-size:15px;white-space:nowrap;overflow:hidden;
+  transition:transform .35s var(--spring),box-shadow .3s}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(0) scale(.98)}
+.btn svg{width:17px;height:17px;flex:none}
+.btn.pri{background:linear-gradient(135deg,#f6ab86,#ee8f6a 60%,#e8869a);color:#fff;box-shadow:0 10px 28px rgba(238,143,106,.38)}
+.btn.pri:hover{box-shadow:0 14px 34px rgba(238,143,106,.48)}
+.btn.pri::after{content:"";position:absolute;top:0;bottom:0;left:-40%;width:30%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-20deg);animation:sweep 4.2s ease-in-out infinite}
+@keyframes sweep{0%,55%{left:-40%}85%,100%{left:130%}}
+.btn.sec{background:rgba(255,255,255,.72);border:1px solid #fff;color:var(--ink);box-shadow:0 4px 16px rgba(100,80,160,.08)}
+.btn small{font-size:12px;opacity:.82;font-weight:400}
+.btn.small{height:38px;padding:0 18px;font-size:14px;flex:none}
+.btn.small::after{animation:none;display:none}
+
+/* ───── 首屏 ───── */
+.hero{position:relative;min-height:calc(100vh - 64px);min-height:calc(100svh - 64px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px 0 40px}
 .badge{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);padding:6px 14px;border-radius:999px;background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.badge b{width:6px;height:6px;border-radius:50%;background:#6cc89a;box-shadow:0 0 6px #6cc89a}
-h1{font-size:clamp(34px,6vw,60px);font-weight:600;line-height:1.25;margin-top:22px}
-h1 em{font-style:normal;background:linear-gradient(90deg,#ee8f6a,#c98bc4 50%,#8f86e0);-webkit-background-clip:text;background-clip:text;color:transparent}
-.sub{font-size:clamp(15px,1.7vw,18px);color:var(--ink2);margin-top:14px}
-.cta{display:flex;gap:12px;justify-content:center;margin-top:30px;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 24px;border-radius:999px;font-size:15px;transition:transform .2s,box-shadow .2s}
-.btn:hover{transform:translateY(-1px)}
-.btn.pri{background:linear-gradient(135deg,#f6ab86,#ee8f6a);color:#fff;box-shadow:0 8px 24px rgba(238,143,106,.35)}
-.btn.sec{background:rgba(255,255,255,.7);border:1px solid #fff;color:var(--ink);box-shadow:0 4px 16px rgba(100,80,160,.08)}
-.btn svg{width:16px;height:16px}
-.hint{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--ink3);animation:bob 2.4s ease-in-out infinite}
-@keyframes bob{50%{transform:translate(-50%,5px)}}
+.badge b{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok);animation:blink 2.4s ease-in-out infinite}
+@keyframes blink{50%{opacity:.35}}
+h1{font-size:clamp(36px,6.4vw,66px);font-weight:600;line-height:1.22;margin-top:22px}
+h1 em{font-style:normal;background:linear-gradient(90deg,#ee8f6a,#d98bb4 35%,#8f86e0 65%,#ee8f6a);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:flow 8s linear infinite}
+@keyframes flow{to{background-position:-200% 0}}
+.split .ch{display:inline-block;opacity:0;transform:translateY(.5em);filter:blur(6px);transition:opacity .8s var(--ease),transform .8s var(--ease),filter .8s var(--ease)}
+.split.in .ch{opacity:1;transform:none;filter:none}
+.sub{font-size:clamp(15px,1.7vw,18px);color:var(--ink2);margin-top:16px;line-height:1.8;max-width:640px;padding:0 8px;text-wrap:balance}
+#orb{width:min(520px,100vw);height:min(340px,80vw);cursor:pointer;touch-action:manipulation;margin:-4px 0 -12px}
+.state{height:20px;font-size:13px;color:var(--ink2);display:flex;align-items:center;justify-content:center;gap:8px}
+.state b{width:6px;height:6px;border-radius:50%;background:var(--warm);box-shadow:0 0 8px var(--warm);transition:background .6s,box-shadow .6s}
+.cta{display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap}
+.cta-note{font-size:12px;color:var(--ink3);margin-top:12px}
 
-/* 功能分节 */
-section{padding:110px 0}
+/* 说一句话：两行反向缓慢流动的话 */
+.say{padding:34px 0 10px;overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.say .row{display:flex;gap:12px;width:max-content;animation:marq 48s linear infinite}
+.say .row+.row{margin-top:12px;animation-direction:reverse;animation-duration:56s}
+.say span{font-size:14px;color:var(--ink2);padding:9px 16px;border-radius:999px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.9);white-space:nowrap}
+.say span b{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;vertical-align:1px}
+@keyframes marq{to{transform:translateX(-50%)}}
+.say-cap{text-align:center;font-size:13px;color:var(--ink3);margin-top:16px}
+
+/* ───── 通用分节 ───── */
+section.sec{padding:120px 0}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--warm);font-weight:600}
+.kicker::before{content:"";width:18px;height:1.5px;border-radius:2px;background:currentColor}
+h2{font-size:clamp(28px,4.2vw,44px);font-weight:600;line-height:1.32;margin-top:14px}
+.lead{font-size:17px;line-height:1.9;color:var(--ink2);margin-top:18px;max-width:460px}
+.center{text-align:center}
+.center .lead{margin-left:auto;margin-right:auto}
+.pts{list-style:none;margin-top:28px;border-top:1px solid var(--line);max-width:460px}
+.pts li{padding:15px 0;border-bottom:1px solid var(--line);font-size:15px;display:flex;gap:14px;line-height:1.6}
+.pts li i{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#fff;box-shadow:0 2px 8px rgba(120,100,170,.12);margin-top:0}
+.pts li i::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--warm)}
+.pts li small{display:block;color:var(--ink3);font-size:13px;margin-top:2px}
 .feat{display:grid;grid-template-columns:1fr auto;gap:80px;align-items:center}
 .feat.rev{grid-template-columns:auto 1fr}
 .feat.rev .txt{order:2}
-.kicker{font-size:13px;color:var(--warm);letter-spacing:.12em;font-weight:600}
-h2{font-size:clamp(28px,4vw,42px);font-weight:600;line-height:1.3;margin-top:12px}
-.txt p{font-size:17px;line-height:1.9;color:var(--ink2);margin-top:18px;max-width:440px}
-.pts{list-style:none;margin-top:28px;border-top:1px solid var(--line);max-width:440px}
-.pts li{padding:14px 0;border-bottom:1px solid var(--line);font-size:15px;color:var(--ink);display:flex;gap:12px}
-.pts li span{color:var(--ink3);font-variant-numeric:tabular-nums;font-size:13px;padding-top:2px}
+.glass{background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(16px) saturate(1.3);-webkit-backdrop-filter:blur(16px) saturate(1.3);box-shadow:0 10px 36px rgba(120,100,170,.08)}
 
-/* 更多 */
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:44px}
-.card{padding:26px 22px;border-radius:24px;background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 8px 30px rgba(120,100,170,.07)}
-.card .ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:#fff;box-shadow:0 2px 10px rgba(120,100,170,.10)}
-.card .ic svg{width:19px;height:19px}
-.card h3{font-size:16px;font-weight:600;margin-top:18px}
-.card p{font-size:13.5px;line-height:1.8;color:var(--ink2);margin-top:6px}
-.center{text-align:center}
+/* 进场：上浮 + 去模糊 */
+.rv{opacity:0;transform:translateY(28px);filter:blur(8px);transition:opacity 1s var(--ease),transform 1s var(--ease),filter 1s var(--ease)}
+.rv.in{opacity:1;transform:none;filter:none}
+.d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}.d5{transition-delay:.4s}
 
-/* 路线 */
-.road{display:grid;grid-template-columns:repeat(4,1fr);margin-top:52px;position:relative}
-.road::before{content:"";position:absolute;left:0;right:0;top:7px;height:1px;background:var(--line)}
-.step{position:relative;padding-right:24px}
-.step i{display:block;width:15px;height:15px;border-radius:50%;background:#fff;border:1.5px solid var(--ink3);position:relative}
-.step.now i{border-color:var(--warm);background:var(--warm);box-shadow:0 0 0 6px rgba(238,143,106,.15),0 0 14px var(--warm)}
-.step .m{font-size:12px;color:var(--ink3);margin-top:20px;letter-spacing:.08em}
-.step.now .m{color:var(--warm)}
-.step h3{font-size:17px;font-weight:600;margin-top:6px}
-.step p{font-size:13.5px;color:var(--ink2);line-height:1.8;margin-top:6px}
+/* ───── 为什么：网易云 ⇄ 微光 ───── */
+.duo{position:relative;display:grid;grid-template-columns:1fr 1.1fr 1fr;align-items:center;margin-top:60px}
+.side{position:relative;z-index:1;padding:30px 28px;border-radius:28px}
+.side h3{font-size:20px;font-weight:600;display:flex;align-items:center;gap:10px}
+.side h3 i{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-style:normal;font-size:15px;color:#fff}
+.side ul{list-style:none;margin-top:18px}
+.side li{font-size:15px;color:var(--ink2);padding:11px 0;border-top:1px solid var(--line)}
+.side.ncm h3 i{background:linear-gradient(135deg,#f0727a,#d9474f)}
+.side.wg{box-shadow:0 16px 50px rgba(238,143,106,.18);border-color:#fff}
+.side.wg h3 i{background:linear-gradient(135deg,#ffcf8a,#ee8f6a 60%,#8f86e0)}
+.side.wg li{color:var(--ink)}
+.bridge{position:relative;height:220px}
+.bridge canvas{position:absolute;inset:0 -40px;width:calc(100% + 80px);height:100%}
+.bridge span{position:absolute;left:50%;transform:translateX(-50%);font-size:12px;color:var(--ink3);white-space:nowrap;background:rgba(246,242,248,.8);padding:3px 10px;border-radius:999px}
+.bridge .up{top:44px}.bridge .dn{bottom:44px}
+.duo-cap{text-align:center;font-size:15px;color:var(--ink2);margin-top:44px}
 
-footer{padding:56px 0 64px;border-top:1px solid var(--line);margin-top:40px}
-.foot{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink3);gap:16px;flex-wrap:wrap}
-.foot a:hover{color:var(--ink)}
+/* ───── 情绪找歌（可以点的星图） ───── */
+.feel{display:grid;grid-template-columns:.9fr 1.1fr;gap:64px;align-items:center}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:30px;max-width:460px}
+.chip{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;border-radius:999px;font-size:14px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.95);
+  transition:transform .35s var(--spring),box-shadow .3s,background .3s}
+.chip:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(120,100,170,.12)}
+.chip b{width:8px;height:8px;border-radius:50%;flex:none}
+.chip.on{background:#fff;box-shadow:0 8px 24px rgba(238,143,106,.25),inset 0 0 0 1.5px var(--c,var(--warm))}
+.feel-note{font-size:12.5px;color:var(--ink3);margin-top:16px}
+.map{position:relative;border-radius:30px;overflow:hidden;padding:14px}
+.map .sky2{position:relative;aspect-ratio:4/3}
+.map canvas{position:absolute;inset:0;width:100%;height:100%}
+.map .ax{position:absolute;font-size:12px;color:var(--ink3);pointer-events:none}
+.map .say-it{display:block;min-height:22px;padding:2px 6px 8px;font-size:14px;color:var(--ink2)}
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-height:84px;margin-top:8px}
+.picks div{display:flex;align-items:center;gap:10px;font-size:13.5px;padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.78);border:1px solid #fff;
+  opacity:0;transform:translateY(10px);transition:opacity .5s var(--ease),transform .5s var(--ease)}
+.picks div.in{opacity:1;transform:none}
+.picks div b{width:8px;height:8px;border-radius:50%;flex:none}
+.picks div em{font-style:normal;color:var(--ink3);font-size:12px;margin-left:auto}
 
-/* ---------- 手机样机（375×812 原尺寸，按容器缩放） ---------- */
+/* ───── 手机样机（375×812，按容器缩放） ───── */
 .pw{position:relative;width:calc(375px * var(--s,1));height:calc(812px * var(--s,1));flex:none}
-.phone{width:375px;height:812px;border-radius:44px;position:absolute;left:0;top:0;overflow:hidden;transform:scale(var(--s,1));transform-origin:0 0;
+.phone{width:375px;height:812px;border-radius:46px;position:absolute;left:0;top:0;overflow:hidden;transform:scale(var(--s,1));transform-origin:0 0;
   box-shadow:0 40px 90px rgba(90,80,150,.22),0 0 0 10px #fff,0 0 0 11px #e2deef;
   background:linear-gradient(165deg,#dcdcf7 0%,#f4e6ee 42%,#fde8d6 70%,#d9e9fa 100%);color:var(--ink)}
-.phone>canvas.bg{position:absolute;inset:0;width:100%;height:100%}
-.phone .blob{position:absolute;border-radius:50%;filter:blur(40px);opacity:.55}
-.phone .scr{position:absolute;inset:0;padding:54px 20px 28px;display:flex;flex-direction:column}
+.phone canvas.bg{position:absolute;inset:0;width:100%;height:100%}
+.phone .scr{position:absolute;inset:0;padding:52px 20px 24px;display:flex;flex-direction:column}
 .phone .status{position:absolute;top:16px;left:30px;right:30px;display:flex;justify-content:space-between;font-size:13px;font-weight:600}
-.phone .glass{background:rgba(255,255,255,.46);border:1px solid rgba(255,255,255,.75);border-radius:22px;
-  backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3);box-shadow:0 8px 30px rgba(120,100,170,.10)}
+.phone .gl{background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.85);border-radius:20px;box-shadow:0 8px 26px rgba(120,100,170,.10)}
 .phone .row{display:flex;align-items:center}
-.phone .top{justify-content:space-between}
-.phone .av{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff6d8,#ffbf80 45%,#c9b6f0 100%);box-shadow:0 0 14px rgba(255,180,120,.7)}
-.phone .name{margin-left:10px;font-size:15px;font-weight:600}
-.phone .name small{font-weight:400;color:var(--ink2);margin-left:6px;font-size:13px}
-.phone .dot{width:7px;height:7px;border-radius:50%;background:#6cc89a;margin-left:6px;box-shadow:0 0 6px #6cc89a}
-.phone .chip{font-size:12px;color:var(--ink2);padding:7px 12px;border-radius:999px}
-.phone .think{margin-top:22px}
-.phone .think h4{font-size:20px;font-weight:600;color:#5b57a0}
-.phone .think p{font-size:13px;line-height:1.9;color:var(--ink2);margin-top:6px}
-.phone .orbx{position:relative;height:250px;margin:4px -20px 0}
+.phone .hd{gap:10px;font-size:16px;font-weight:600}
+.phone .hd img{width:28px;height:28px;border-radius:50%;box-shadow:0 0 12px rgba(255,170,120,.6)}
+.phone .hd small{font-weight:400;color:var(--ink2);font-size:13px;display:flex;align-items:center;gap:6px}
+.phone .hd small::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.phone .orbx{position:relative;height:190px;margin:0 -20px}
 .phone canvas.fx{position:absolute;inset:0;width:100%;height:100%}
-.phone .mini{padding:14px;gap:12px}
-.phone .cover{width:62px;height:62px;border-radius:14px;flex:none;background:linear-gradient(160deg,#c8c2f2,#f6c9b8 60%,#ffe2a8)}
-.phone .meta{flex:1;min-width:0}
-.phone .t{font-size:15px;font-weight:600}
-.phone .a{font-size:12px;color:var(--ink2);margin-top:3px}
-.phone .bar{height:3px;border-radius:3px;background:rgba(242,154,114,.18);margin-top:10px;position:relative}
-.phone .bar i{position:absolute;left:0;top:0;bottom:0;width:34%;border-radius:3px;background:linear-gradient(90deg,var(--warm2),var(--warm))}
-.phone .bar i::after{content:"";position:absolute;right:-4px;top:-3px;width:9px;height:9px;border-radius:50%;background:var(--warm);box-shadow:0 0 8px var(--warm)}
-.phone .pp{width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;background:#fff;box-shadow:0 4px 16px rgba(242,154,114,.35)}
-.phone .chat{margin-top:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
-.phone .b{font-size:13.5px;line-height:1.6;padding:9px 13px;border-radius:16px;max-width:78%}
-.phone .b.ai{background:rgba(255,255,255,.8);align-self:flex-start;border-top-left-radius:6px}
-.phone .b.me{background:linear-gradient(135deg,#f6ab86,#ee8f6a);color:#fff;align-self:flex-end;border-top-right-radius:6px}
-.phone .sugg{display:flex;gap:8px}
-.phone .sugg span{font-size:12px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.9);color:#6a66a8}
-.phone .input{padding:10px 10px 10px 16px;justify-content:space-between;font-size:13px;color:var(--ink3);border-radius:999px;margin-top:12px}
-.phone .send{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#f6ab86,#ee8f6a);display:grid;place-items:center}
-.phone .mic{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.7);display:grid;place-items:center;margin-right:6px}
-.phone .ring{position:relative;height:340px;margin:18px -20px 0}
-.phone .art{position:absolute;left:50%;top:50%;width:196px;height:196px;margin:-98px 0 0 -98px;border-radius:50%;
-  background:conic-gradient(from 200deg,#c8c2f2,#f6c9b8,#ffe2a8,#a8d4f5,#c8c2f2);box-shadow:0 10px 40px rgba(242,154,114,.35),inset 0 0 0 6px rgba(255,255,255,.6);animation:spin 24s linear infinite}
-.phone .art::after{content:"";position:absolute;inset:84px;border-radius:50%;background:#fff8f0;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
+.phone .th h4{font-size:19px;font-weight:600;color:#5b57a0}
+.phone .th p{font-size:14px;color:var(--ink2);margin-top:6px;min-height:22px}
+.phone .th p::after{content:"";display:inline-block;width:1.5px;height:15px;background:var(--lav);margin-left:2px;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+.phone .card{padding:14px;margin-top:16px}
+.phone .card .t{font-size:15px;font-weight:600}
+.phone .card .s{font-size:12px;color:var(--ink3);margin-top:3px}
+.phone .fg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:12px}
+.phone .fg span{display:flex;align-items:center;justify-content:center;gap:5px;font-size:12.5px;height:34px;border-radius:999px;background:rgba(255,255,255,.75);transition:background .3s,box-shadow .3s}
+.phone .fg span.on{background:#fff;box-shadow:0 4px 14px rgba(238,143,106,.3)}
+.phone .fg b{width:6px;height:6px;border-radius:50%}
+.phone .lbl{font-size:13px;color:var(--ink2);margin:18px 0 9px 4px}
+.phone .hab{display:flex;gap:10px}
+.phone .hab div{width:96px}
+.phone .hab i{display:block;width:96px;height:96px;border-radius:22px;box-shadow:0 6px 18px rgba(120,100,170,.14)}
+.phone .hab p{font-size:12.5px;margin-top:7px;padding-left:2px}
+.phone .hab small{font-size:11px;color:var(--ink3);padding-left:2px}
+.phone .mini{margin-top:auto;padding:10px;gap:12px}
+.phone .mini>i{width:46px;height:46px;border-radius:12px;background:linear-gradient(150deg,#b9c3f2,#f6c9b8);flex:none}
+.phone .mini>div:nth-child(2){flex:1;min-width:0}
+.phone .mini b{display:block;font-size:14.5px}
+.phone .mini span{display:block;font-size:12px;color:var(--warm);margin-top:2px}
+.phone .pp.sm{width:40px;height:40px}
+.phone .ring{position:relative;height:300px;margin:6px -20px 0}
+.phone .art{position:absolute;left:50%;top:50%;width:178px;height:178px;margin:-89px 0 0 -89px;border-radius:50%;
+  background:conic-gradient(from 200deg,#c8c2f2,#f6c9b8,#ffe2a8,#a8d4f5,#c8c2f2);box-shadow:0 10px 40px rgba(242,154,114,.35),inset 0 0 0 5px rgba(255,255,255,.6);animation:spin 26s linear infinite}
+.phone .art::after{content:"";position:absolute;inset:80px;border-radius:50%;background:#fff8f0;box-shadow:0 0 0 2px rgba(255,255,255,.7)}
 @keyframes spin{to{transform:rotate(360deg)}}
-.phone .ptitle{text-align:center;margin-top:6px}
-.phone .ptitle .t{font-size:21px}
-.phone .lyr{text-align:center;margin-top:22px;line-height:2.1;font-size:14px;color:var(--ink3)}
-.phone .lyr .on{font-size:17px;font-weight:600;background:linear-gradient(90deg,#ee8f6a,#8f86e0);-webkit-background-clip:text;background-clip:text;color:transparent}
-.phone .ctl{justify-content:space-between;margin-top:auto;padding:0 10px}
-.phone .ctl .pp{width:62px;height:62px}
-.phone .aitag{align-self:center;margin-top:14px;font-size:12px;color:#6a66a8;padding:7px 14px;border-radius:999px;gap:6px}
-.phone .seg{display:flex;padding:4px;border-radius:999px;margin-top:16px}
-.phone .seg span{flex:1;text-align:center;font-size:13px;padding:7px 0;border-radius:999px;color:var(--ink2)}
-.phone .seg span.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 2px 10px rgba(120,100,170,.12)}
-.phone .map{position:relative;height:370px;margin-top:14px;overflow:hidden}
-.phone .axis{position:absolute;font-size:11px;color:var(--ink3)}
-.phone .moods{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-.phone .mood{padding:12px 14px;border-radius:18px}
-.phone .mood .t{font-size:14px}
-.phone .mood .a{font-size:11.5px}
-.phone h4.pg{font-size:24px;font-weight:600;margin-top:8px}
+.phone .pt{text-align:center;font-size:21px;font-weight:600;margin-top:2px}
+.phone .pa{text-align:center;font-size:13px;color:var(--ink2);margin-top:3px}
+.lyr{position:relative;height:200px;margin-top:10px;overflow:hidden;-webkit-mask:linear-gradient(180deg,transparent,#000 22%,#000 78%,transparent);mask:linear-gradient(180deg,transparent,#000 22%,#000 78%,transparent)}
+.lyr ul{list-style:none;transition:transform .7s var(--ease)}
+.lyr li{height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:17px;font-weight:500;color:var(--ink);opacity:.32;transform:scale(.88);transition:opacity .6s,transform .6s var(--ease),color .6s}
+.lyr li small{font-size:11.5px;color:var(--ink2);font-weight:400;margin-top:2px}
+.lyr li.on{opacity:1;transform:none;color:var(--warm);font-weight:600}
+.lyr li.on small{color:var(--warm)}
+.lyr li.near{opacity:.55}
+.phone .ask{position:absolute;left:16px;right:16px;bottom:100px;padding:16px 18px;border-radius:22px;background:rgba(255,255,255,.88);border:1px solid #fff;box-shadow:0 18px 50px rgba(90,70,150,.2);
+  opacity:0;transform:translateY(24px) scale(.97);transition:opacity .5s var(--ease),transform .6s var(--spring);pointer-events:none}
+.phone .ask.in{opacity:1;transform:none}
+.phone .ask b{display:block;font-size:15px;color:var(--warm)}
+.phone .ask p{font-size:13px;line-height:1.75;color:var(--ink);margin-top:8px}
+.phone .ex{align-self:center;margin-top:auto;font-size:12.5px;color:var(--lav);padding:8px 16px;border-radius:999px}
+.phone .ctl{justify-content:space-between;margin-top:14px;padding:0 14px}
+.phone .pp{width:60px;height:60px;border-radius:50%;display:grid;place-items:center;background:#fff;box-shadow:0 8px 22px rgba(242,154,114,.38)}
 
-/* 进场 */
-.rv{opacity:0;transform:translateY(24px);transition:opacity .9s ease,transform .9s cubic-bezier(.2,.7,.2,1)}
-.rv.in{opacity:1;transform:none}
+/* ───── 更多（卡片：悬停时光跟着指针走） ───── */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:52px}
+.card{position:relative;padding:28px 24px;border-radius:26px;overflow:hidden;transition:transform .5s var(--spring),box-shadow .4s}
+.card::before{content:"";position:absolute;inset:0;background:radial-gradient(260px circle at var(--mx,50%) var(--my,0%),rgba(255,210,180,.5),transparent 60%);opacity:0;transition:opacity .4s}
+.card:hover{transform:translateY(-4px);box-shadow:0 18px 44px rgba(120,100,170,.14)}
+.card:hover::before{opacity:1}
+.card>*{position:relative}
+.card .ic{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:#fff;box-shadow:0 3px 12px rgba(120,100,170,.12)}
+.card .ic svg{width:20px;height:20px}
+.card h3{font-size:17px;font-weight:600;margin-top:18px}
+.card p{font-size:14px;line-height:1.8;color:var(--ink2);margin-top:6px}
 
-@media (max-width:900px){
-  .links a.hide-m{display:none}
-  section{padding:72px 0}
-  .feat,.feat.rev{grid-template-columns:1fr;gap:44px;justify-items:center}
+/* ───── 三步用起来 ───── */
+.steps{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:56px}
+.steps::before,.steps::after{content:"";position:absolute;left:16.6%;right:16.6%;top:27px;height:2px;border-radius:2px;background:var(--line)}
+.steps::after{background:linear-gradient(90deg,var(--warm2),var(--warm),var(--lav));transform-origin:0 50%;transform:scaleX(0);transition:transform 1.6s var(--ease) .2s}
+.steps.in::after{transform:scaleX(1)}
+.step{position:relative;z-index:1;text-align:center}
+.step i{display:grid;place-items:center;width:56px;height:56px;margin:0 auto;border-radius:50%;background:#fff;font-style:normal;font-size:18px;font-weight:600;color:var(--warm);
+  box-shadow:0 8px 22px rgba(238,143,106,.2),0 0 0 6px rgba(255,255,255,.6)}
+.step h3{font-size:17px;font-weight:600;margin-top:20px}
+.step p{font-size:14px;color:var(--ink2);line-height:1.8;margin-top:6px}
+
+/* ───── 下载 ───── */
+.dl{position:relative;display:grid;grid-template-columns:1fr auto;gap:40px;align-items:center;padding:48px;border-radius:36px;overflow:hidden;margin-top:12px}
+.dl::before{content:"";position:absolute;width:420px;height:420px;right:-120px;top:-160px;border-radius:50%;background:radial-gradient(circle,rgba(255,200,160,.55),transparent 70%);animation:drift 18s ease-in-out infinite}
+.dl>*{position:relative}
+.dl-head{display:flex;align-items:center;gap:16px}
+.dl-head img{width:64px;height:64px;border-radius:50%;box-shadow:0 0 30px rgba(255,170,120,.6);animation:breathe 4s ease-in-out infinite}
+@keyframes breathe{50%{box-shadow:0 0 46px rgba(255,170,120,.85);transform:scale(1.04)}}
+.dl-head h2{margin:0;font-size:clamp(26px,3.4vw,36px)}
+.dl-meta{font-size:13.5px;color:var(--ink2);margin-top:4px}
+.dl .cta{justify-content:flex-start;margin-top:28px}
+.dl-req{font-size:13px;color:var(--ink3);margin-top:18px;line-height:1.8}
+.dl-req a{color:var(--ink2);border-bottom:1px solid var(--line)}
+.qr{width:168px;padding:14px;border-radius:24px;background:#fff;box-shadow:0 10px 30px rgba(120,100,170,.14);text-align:center}
+.qr canvas{width:140px;height:140px;display:block}
+.qr span{display:block;font-size:12px;color:var(--ink3);margin-top:8px}
+
+/* ───── 问答 ───── */
+.faq{max-width:760px;margin:44px auto 0}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{list-style:none;cursor:pointer;padding:22px 4px;font-size:16px;font-weight:500;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"";flex:none;width:10px;height:10px;border-right:1.5px solid var(--ink3);border-bottom:1.5px solid var(--ink3);transform:rotate(45deg) translate(-2px,-2px);transition:transform .4s var(--spring)}
+.faq details[open] summary::after{transform:rotate(225deg) translate(-2px,-2px)}
+.faq .ans{overflow:hidden;height:0;transition:height .45s var(--ease)}
+.faq .ans p{font-size:15px;line-height:1.9;color:var(--ink2);padding:0 4px 22px}
+
+footer{padding:56px 0 64px;border-top:1px solid var(--line);margin-top:60px}
+.foot{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink3);gap:16px;flex-wrap:wrap}
+.foot .brand{font-size:15px}
+.foot .brand img{width:24px;height:24px}
+.foot nav{display:flex;gap:18px}
+.foot a:hover{color:var(--ink)}
+
+@media (max-width:980px){
+  .links{display:none}
+  .gh-link{margin-left:auto}
+  section.sec{padding:84px 0}
+  .feat,.feat.rev,.feel{grid-template-columns:1fr;gap:48px;justify-items:center}
   .feat.rev .txt{order:0}
   .txt{width:100%}
+  .feel .map{width:100%;max-width:520px}
+  .duo{grid-template-columns:1fr;gap:0}
+  .bridge{height:150px}
+  .bridge canvas{inset:-10px 0;width:100%;height:calc(100% + 20px)}
   .grid{grid-template-columns:1fr 1fr}
-  .road{grid-template-columns:1fr;gap:28px;padding-left:30px}
-  .road::before{left:7px;right:auto;top:0;bottom:0;width:1px;height:auto}
-  .step i{position:absolute;left:-30px;top:2px}
-  .step .m{margin-top:0}
+  .dl{grid-template-columns:1fr;padding:34px 26px}
+  .qr{display:none}
 }
-@media (max-width:520px){
+@media (max-width:560px){
   .wrap{padding:0 16px}
-  .links{gap:14px}
-  .gh span{display:none}
+  .nav{padding:10px 12px}
+  .nav-inner{gap:10px;padding-left:12px}
+  .brand em{display:none}
   .grid{grid-template-columns:1fr}
-  .txt p{font-size:16px}
+  .chips{grid-template-columns:repeat(4,1fr);gap:8px}
+  .chip{height:40px;font-size:13px;gap:6px}
+  .steps{grid-template-columns:1fr;gap:30px}
+  .steps::before,.steps::after{left:27px;right:auto;top:28px;bottom:28px;width:2px;height:auto}
+  .steps::after{transform-origin:50% 0;transform:scaleY(0)}
+  .steps.in::after{transform:scaleY(1)}
+  .step{display:grid;grid-template-columns:56px 1fr;gap:0 18px;text-align:left;align-items:start}
+  .step i{grid-row:span 2;margin:0}
+  .step h3{margin-top:6px}
+  .lead{font-size:16px}
+  .btn{height:46px;padding:0 20px}
+  .dl .cta .btn{flex:1;justify-content:center}
 }
-@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.hint{animation:none}.phone .art{animation:none}}
+@media (prefers-reduced-motion:reduce){
+  .sky i,.btn.pri::after,h1 em,.say .row,.phone .art,.dl::before,.dl-head img,.badge b{animation:none}
+  .rv,.split .ch{opacity:1;transform:none;filter:none;transition:none}
+  .steps::after{transform:none;transition:none}
+}
 </style>
 </head>
 <body>
-<div class="sky"></div>
-<canvas id="dust"></canvas>
+<div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
+<canvas id="dust" aria-hidden="true"></canvas>
+<div class="glow" id="glow" aria-hidden="true"></div>
 
-<header id="hd"><div class="wrap nav">
-  <a class="logo" href="#"><img src="logo.png" alt="">微光<small>Lumen</small></a>
-  <nav class="links">
-    <a class="hide-m" href="#now">功能</a>
-    <a class="hide-m" href="#road">路线</a>
-    <a class="gh" href="https://github.com/Hector-xue/weiguang" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 008 0z"/></svg><span>GitHub</span></a>
-  </nav>
-</div></header>
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top"><img src="logo.png" alt=""><span>微光</span><em>Lumen</em></a>
+    <nav class="links" id="links">
+      <span class="pill" id="pill"></span>
+      <a href="#why">为什么</a>
+      <a href="#feel">情绪找歌</a>
+      <a href="#know">懂你</a>
+      <a href="#lyrics">歌词</a>
+      <a href="#faq">问答</a>
+    </nav>
+    <a class="gh-link" href="https://github.com/Hector-xue/weiguang" target="_blank" rel="noopener" aria-label="GitHub 源码"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 008 0z"/></svg></a>
+    <a class="btn pri small" href="#download">下载</a>
+  </div>
+</header>
 
 <main>
-<div class="hero">
-  <span class="badge"><b></b>开发中 · 安卓 · 开源</span>
-  <h1>会陪你<em>听歌</em>的播放器</h1>
-  <p class="sub">懂你此刻，也懂你曲库里的每一首歌。</p>
+<section class="hero" id="top">
+  <span class="badge"><b></b><span class="ver-tag">开源免费</span> · 安卓</span>
+  <h1 class="split" id="title">懂你此刻的<br><em>听歌伙伴</em></h1>
+  <p class="sub rv d2">曲库还是你的网易云。微光按心情排歌、记得你的习惯、陪你读歌词。</p>
   <canvas id="orb" aria-label="微光光球，点一下"></canvas>
   <div class="state"><b id="sdot"></b><span id="stxt">聆听中</span></div>
-  <div class="cta">
-    <a class="btn pri" href="https://github.com/Hector-xue/weiguang" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.2l2 4.3 4.7.6-3.4 3.2.9 4.6L8 11.6l-4.2 2.3.9-4.6L1.3 6.1 6 5.5z"/></svg>在 GitHub 关注</a>
-    <a class="btn sec" href="#now">看看长什么样</a>
+  <div class="cta rv d3">
+    <a class="btn pri" href="download/weiguang.apk" download><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M5.5 8.5L10 13l4.5-4.5M4 16.5h12"/></svg>下载安卓版<small class="dl-size"></small></a>
+    <a class="btn sec" href="#feel">试试情绪找歌</a>
   </div>
-  <span class="hint">向下</span>
+  <p class="cta-note rv d4">需要安卓 8.0 以上，并装有网易云音乐</p>
+</section>
+
+<div class="say" aria-hidden="true">
+  <div class="row" id="say1"></div>
+  <div class="row" id="say2"></div>
 </div>
+<p class="say-cap">说一句话，或者点一个心情</p>
 
-<!-- 01 此刻 -->
-<section id="now"><div class="wrap feat">
-  <div class="txt rv">
-    <div class="kicker">01 · 此刻</div>
-    <h2>说一句话，<br>它就懂</h2>
-    <p>「有点累」「来点下雨天的」——微光从你自己的曲库里挑歌，顺着天气和时间，接住你此刻的情绪。</p>
-    <ul class="pts">
-      <li><span>A</span>光球就是 AI 的状态：聆听、思考、回应</li>
-      <li><span>B</span>对话点歌，一键快捷回复</li>
-      <li><span>C</span>开口说或哼一段也行</li>
-    </ul>
+<!-- 为什么 -->
+<section class="sec" id="why"><div class="wrap">
+  <div class="center rv"><span class="kicker">为什么要微光</span>
+    <h2>网易云记得你听过什么，<br>微光想知道你此刻怎么样</h2>
   </div>
-  <div class="pw rv" data-pw>
-  <div class="phone">
-    <div class="blob" style="width:220px;height:220px;background:#c7c0f5;left:-60px;top:80px"></div>
-    <div class="blob" style="width:240px;height:240px;background:#ffd2b0;right:-80px;top:300px"></div>
-    <canvas class="bg"></canvas>
-    <div class="status"><span>20:36</span><span>5G ▮</span></div>
-    <div class="scr">
-      <div class="row top">
-        <div class="row"><div class="av"></div><div class="name">微光<small>在听你</small></div><div class="dot"></div></div>
-        <div class="chip glass">深圳 · 小雨 24°</div>
-      </div>
-      <div class="think"><h4>微光在想…</h4><p>下雨天，适合慢一点。<br>给你留了三首安静的歌。</p></div>
-      <div class="orbx"><canvas class="fx" data-fx="orb"></canvas></div>
-      <div class="glass row mini">
-        <div class="cover"></div>
-        <div class="meta"><div class="t">起风的季节</div><div class="a">陈鸿宇</div><div class="bar"><i></i></div></div>
-        <div class="pp"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="3" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/><rect x="9.6" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/></svg></div>
-      </div>
-      <div class="glass chat">
-        <div class="b me">有点累，但还在坚持。</div>
-        <div class="b ai">我在呢。接下来放温柔一点的，好吗？</div>
-        <div class="sugg"><span>好</span><span>换成钢琴</span><span>来点能打起精神的</span></div>
-      </div>
-      <div class="glass row input"><span>说点什么，或者哼一段…</span>
-        <div class="row"><div class="mic"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="4.5" y="1" width="5" height="8" rx="2.5" fill="#8f86e0"/><path d="M2.5 7a4.5 4.5 0 009 0M7 11.5V13" stroke="#8f86e0" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg></div>
-        <div class="send"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7h9M7.5 3l4 4-4 4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
-      </div>
+  <div class="duo">
+    <div class="side ncm glass rv d1">
+      <h3><i>♪</i>网易云</h3>
+      <ul><li>海量曲库和版权</li><li>播放、会员、下载</li><li>你的歌单和红心</li></ul>
     </div>
-  </div></div>
+    <div class="bridge"><canvas id="bridge"></canvas><span class="up">歌单 · 正在播放 · 歌词 →</span><span class="dn">← 点歌 · 切歌 · 红心</span></div>
+    <div class="side wg glass rv d2">
+      <h3><i>✦</i>微光</h3>
+      <ul><li>按此刻的心情排歌</li><li>记得你的习惯和口味</li><li>陪你读每一句歌词</li></ul>
+    </div>
+  </div>
+  <p class="duo-cap rv">微光不取代网易云，它坐在旁边陪你听。</p>
 </div></section>
 
-<!-- 02 播放 -->
-<section><div class="wrap feat rev">
-  <div class="txt rv">
-    <div class="kicker">02 · 播放</div>
-    <h2>看得见的<br>音乐</h2>
-    <p>封面外一圈粒子跟着频谱起伏，重音处迸出火花；整页颜色随封面流动。歌词里哪句打动你，点一下，微光讲给你听。</p>
-    <ul class="pts">
-      <li><span>A</span>频谱粒子环，不要录音权限</li>
-      <li><span>B</span>逐字歌词 · AI 解读这句</li>
-      <li><span>C</span>锁屏、通知栏、小组件</li>
-    </ul>
+<!-- 情绪找歌 -->
+<section class="sec" id="feel"><div class="wrap feel">
+  <div class="txt">
+    <span class="kicker rv">情绪找歌</span>
+    <h2 class="rv d1">先接住你，<br>再带你走出来</h2>
+    <p class="lead rv d2">选一个心情，微光在你曲库的情绪星图上走一条路：前几首陪着你，后面一点点亮起来。</p>
+    <div class="chips rv d3" id="chips"></div>
+    <p class="feel-note rv d4">星图示意。在 App 里，每颗星都是你自己曲库里的歌。</p>
   </div>
-  <div class="pw rv" data-pw>
-  <div class="phone" style="background:linear-gradient(170deg,#e4ddf8 0%,#f8e4e6 45%,#ffe9d2 75%,#e6eefb 100%)">
-    <div class="blob" style="width:280px;height:280px;background:#ffc9a8;left:40px;top:120px;opacity:.5"></div>
-    <canvas class="bg"></canvas>
-    <div class="status"><span>20:37</span><span>5G ▮</span></div>
-    <div class="scr">
-      <div class="row top"><span style="font-size:20px;color:var(--ink2)">⌄</span><span class="chip glass">来自 · 下雨天电台</span><span style="font-size:18px;color:var(--ink2)">⋯</span></div>
-      <div class="ring"><canvas class="fx" data-fx="ring"></canvas><div class="art"></div></div>
-      <div class="ptitle"><div class="t">起风的季节</div><div class="a">陈鸿宇 · 01:24 / 04:37</div></div>
-      <div class="lyr"><div>走过了很多城市</div><div class="on">风把旧事吹成了光</div><div>我还在原地等你</div></div>
-      <div class="glass row aitag"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 0l1.6 5.4L14 7l-5.4 1.6L7 14l-1.6-5.4L0 7l5.4-1.6z" fill="#8f86e0"/></svg>微光解读这句</div>
-      <div class="row ctl">
-        <span style="font-size:18px;color:var(--ink2)">♡</span>
-        <svg width="22" height="22" viewBox="0 0 22 22"><path d="M17 4L8 11l9 7zM5 4v14" stroke="#34324d" stroke-width="2" fill="#34324d" stroke-linejoin="round"/></svg>
-        <div class="pp"><svg width="20" height="20" viewBox="0 0 16 16"><rect x="3" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/><rect x="9.6" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/></svg></div>
-        <svg width="22" height="22" viewBox="0 0 22 22"><path d="M5 4l9 7-9 7zM17 4v14" stroke="#34324d" stroke-width="2" fill="#34324d" stroke-linejoin="round"/></svg>
-        <span style="font-size:18px;color:var(--ink2)">≋</span>
-      </div>
+  <div class="map glass rv d2" id="map">
+    <span class="say-it" id="sayit">点一个心情</span>
+    <div class="sky2"><canvas id="mapc"></canvas>
+      <span class="ax" style="right:8px;top:4px">高能量 ↑</span>
+      <span class="ax" style="right:8px;bottom:2px">明亮 →</span>
     </div>
-  </div></div>
+    <div class="picks" id="picks"></div>
+  </div>
 </div></section>
 
-<!-- 03 情绪星图 -->
-<section><div class="wrap feat">
-  <div class="txt rv">
-    <div class="kicker">03 · 情绪星图</div>
-    <h2>把曲库<br>排成星空</h2>
-    <p>每首歌按明亮与能量落成一颗星。从低落拖到开心画一条线，就是一张慢慢把你托起来的歌单。</p>
+<!-- 懂你 -->
+<section class="sec" id="know"><div class="wrap feat">
+  <div class="txt">
+    <span class="kicker rv">懂你</span>
+    <h2 class="rv d1">越听，<br>越懂你</h2>
     <ul class="pts">
-      <li><span>A</span>画线成歌单，情绪渐进过渡</li>
-      <li><span>B</span>点一片星域，就是一个电台</li>
-      <li><span>C</span>特征在手机本地计算</li>
+      <li class="rv d2"><i></i><div>这个点你常听的歌<small>从你自己的听歌记录里学，不用 AI</small></div></li>
+      <li class="rv d3"><i></i><div>说「下雨了」「加班好累」<small>按你的口味，只从你的曲库里挑</small></div></li>
+      <li class="rv d4"><i></i><div>换一首歌，它会想一句心里话<small>结合时间、正在听的歌和你常听的歌手</small></div></li>
     </ul>
   </div>
-  <div class="pw rv" data-pw>
-  <div class="phone" style="background:linear-gradient(175deg,#dfe6fb 0%,#ece4f7 40%,#f9e6ea 75%,#fdeedd 100%)">
-    <div class="blob" style="width:240px;height:240px;background:#bcd9f7;left:-40px;top:160px"></div>
-    <canvas class="bg"></canvas>
-    <div class="status"><span>20:40</span><span>5G ▮</span></div>
-    <div class="scr">
-      <h4 class="pg">情绪星图</h4>
-      <div class="a" style="font-size:13px">你的 1,284 首歌，按感觉排成了星空</div>
-      <div class="glass seg"><span class="on">星图</span><span>歌单</span><span>本地</span></div>
-      <div class="glass map"><canvas class="fx" data-fx="map"></canvas>
-        <span class="axis" style="left:12px;top:10px">高能量</span><span class="axis" style="left:12px;bottom:10px">安静</span><span class="axis" style="right:12px;bottom:10px">明亮 →</span>
-      </div>
-      <div class="moods">
-        <div class="glass mood"><div class="t">下雨天</div><div class="a">32 首 · 正在播放</div></div>
-        <div class="glass mood"><div class="t">深夜专注</div><div class="a">48 首</div></div>
-        <div class="glass mood"><div class="t">通勤提神</div><div class="a">27 首</div></div>
-        <div class="glass mood"><div class="t">画一条线</div><div class="a">从低落走到开心</div></div>
+  <div class="pw rv d2" data-pw>
+    <div class="phone">
+      <canvas class="bg"></canvas>
+      <div class="status"><span>22:41</span><span>5G ▮</span></div>
+      <div class="scr">
+        <div class="row hd"><img src="logo.png" alt="">微光<small>在听你</small></div>
+        <div class="orbx"><canvas class="fx" data-fx="orb"></canvas></div>
+        <div class="th"><h4>微光在想…</h4><p id="think"></p></div>
+        <div class="card gl">
+          <div class="t">此刻的心情</div><div class="s">选一个，微光按情绪从你的曲库里排一段歌</div>
+          <div class="fg" id="pfeel"></div>
+        </div>
+        <div class="lbl">这个点你常听</div>
+        <div class="hab">
+          <div><i style="background:linear-gradient(150deg,#b9c3f2,#f6c9b8)"></i><p>夜航</p><small>常在 22 点</small></div>
+          <div><i style="background:linear-gradient(150deg,#a8d4f5,#d9c8f2)"></i><p>安静的城</p><small>常在 22 点</small></div>
+          <div><i style="background:linear-gradient(150deg,#ffe2a8,#f6ab86)"></i><p>晚安</p><small>常在 23 点</small></div>
+        </div>
+        <div class="row mini gl"><i></i><div><b>夜航</b><span>灯一盏一盏地亮过去</span></div><div class="pp sm"><svg width="14" height="14" viewBox="0 0 16 16"><rect x="3" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/><rect x="9.6" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/></svg></div></div>
       </div>
     </div>
-  </div></div>
+  </div>
+</div></section>
+
+<!-- 歌词 -->
+<section class="sec" id="lyrics"><div class="wrap feat rev">
+  <div class="txt">
+    <span class="kicker rv">歌词</span>
+    <h2 class="rv d1">每一句，<br>都可以多想一会儿</h2>
+    <ul class="pts">
+      <li class="rv d2"><i></i><div>整首滚动歌词，带翻译<small>点封面展开，当前这句居中放大</small></div></li>
+      <li class="rv d3"><i></i><div>点一句，微光讲给你听<small>这句的意象和情绪，不编背景</small></div></li>
+      <li class="rv d4"><i></i><div>封面外一圈粒子跟着频谱跳<small>整页颜色随封面流动</small></div></li>
+    </ul>
+  </div>
+  <div class="pw rv d2" data-pw>
+    <div class="phone" style="background:linear-gradient(170deg,#e4ddf8 0%,#f8e4e6 45%,#ffe9d2 75%,#e6eefb 100%)">
+      <canvas class="bg"></canvas>
+      <div class="status"><span>22:43</span><span>5G ▮</span></div>
+      <div class="scr">
+        <div class="ring"><canvas class="fx" data-fx="ring"></canvas><div class="art"></div></div>
+        <div class="pt">慢慢亮</div>
+        <div class="pa">示例歌曲</div>
+        <div class="lyr"><ul id="lyr"></ul></div>
+        <div class="ex gl">✦ 解读这句</div>
+        <div class="row ctl">
+          <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z" fill="#ee8f6a"/></svg>
+          <svg width="22" height="22" viewBox="0 0 22 22"><path d="M17 4L8 11l9 7zM5 4v14" stroke="#34324d" stroke-width="2" fill="#34324d" stroke-linejoin="round"/></svg>
+          <div class="pp"><svg width="20" height="20" viewBox="0 0 16 16"><rect x="3" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/><rect x="9.6" y="2" width="3.4" height="12" rx="1.2" fill="#ee8f6a"/></svg></div>
+          <svg width="22" height="22" viewBox="0 0 22 22"><path d="M5 4l9 7-9 7zM17 4v14" stroke="#34324d" stroke-width="2" fill="#34324d" stroke-linejoin="round"/></svg>
+          <span style="font-size:12px;color:var(--ink2)">网易云</span>
+        </div>
+      </div>
+      <div class="ask" id="ask"><b id="askq"></b><p id="aska"></p></div>
+    </div>
+  </div>
 </div></section>
 
 <!-- 更多 -->
-<section><div class="wrap">
-  <div class="center rv"><div class="kicker">还有</div><h2>你的歌，你的模型，你的手机</h2></div>
+<section class="sec" style="padding-top:40px"><div class="wrap">
+  <div class="center rv"><span class="kicker">还有</span><h2>小而周到</h2></div>
   <div class="grid">
-    <div class="card rv"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#ee8f6a" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="4" width="14" height="5" rx="1.5"/><rect x="3" y="11" width="14" height="5" rx="1.5"/><path d="M6 6.5h.01M6 13.5h.01"/></svg></div><h3>本地 + 私有云</h3><p>本地音乐，以及 Navidrome、Jellyfin、WebDAV。</p></div>
-    <div class="card rv"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#8f86e0" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="10" r="3.5"/><path d="M10.5 10H17M14.5 10v3M17 10v2"/></svg></div><h3>自带模型</h3><p>DeepSeek、Kimi、本地 Ollama，填上就能用。</p></div>
-    <div class="card rv"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#6cb59a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5l6 2.5v4.5c0 4-2.6 6.6-6 8-3.4-1.4-6-4-6-8V5z"/><path d="M7.5 10l1.8 1.8 3.4-3.6"/></svg></div><h3>音频不出手机</h3><p>只把歌名和标签交给 AI，出网路径逐条写明。</p></div>
-    <div class="card rv"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#e0a64e" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="14" height="6" rx="1.5"/></svg></div><h3>没填也好用</h3><p>不接 AI 时，星图和推荐走本地规则照常工作。</p></div>
+    <div class="card glass rv d1"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#ee8f6a" stroke-width="1.6"><circle cx="10" cy="10" r="4.5"/><circle cx="10" cy="10" r="8" stroke-dasharray="2 3"/></svg></div><h3>悬浮光球</h3><p>在网易云里也看得见微光，点一下就回来。</p></div>
+    <div class="card glass rv d2"><div class="ic"><svg viewBox="0 0 20 20" fill="#8f86e0"><circle cx="5" cy="13" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="14" cy="11" r="1.4"/><circle cx="15" cy="5" r="1.1"/><path d="M5 13L9 8l5 3 1-6" stroke="#8f86e0" stroke-width="1.1" fill="none" stroke-dasharray="1.5 2"/></svg></div><h3>情绪星图</h3><p>曲库按明亮和能量排成星空，画一条线就是歌单。</p></div>
+    <div class="card glass rv d3"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#e0a64e" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="10" r="3.5"/><path d="M10.5 10H17M14.5 10v3M17 10v2"/></svg></div><h3>自带模型</h3><p>DeepSeek、Kimi、硅基流动、本地 Ollama，填上就能用。</p></div>
+    <div class="card glass rv d1"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#6cb59a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5l6 2.5v4.5c0 4-2.6 6.6-6 8-3.4-1.4-6-4-6-8V5z"/><path d="M7.5 10l1.8 1.8 3.4-3.6"/></svg></div><h3>数据在手机里</h3><p>歌单和听歌记录只存本机。歌词、封面只按歌曲 ID 查，不带账号。</p></div>
+    <div class="card glass rv d2"><div class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="#e98aa6" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h8M4 14h10"/></svg></div><h3>不填 AI 也好用</h3><p>滚动歌词、常听习惯、频谱粒子都不靠 AI。</p></div>
+    <div class="card glass rv d3"><div class="ic"><svg viewBox="0 0 16 16" fill="#34324d"><path d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 008 0z"/></svg></div><h3>开源免费</h3><p>MIT 协议，没有广告和统计，代码都在 GitHub。</p></div>
   </div>
 </div></section>
 
-<!-- 路线 -->
-<section id="road"><div class="wrap">
-  <div class="rv"><div class="kicker">路线</div><h2>一步一步点亮</h2></div>
-  <div class="road">
-    <div class="step now rv"><i></i><div class="m">M1 · 进行中</div><h3>播放器本体</h3><p>本地曲库、播放页、粒子频谱、歌词、小组件</p></div>
-    <div class="step rv"><i></i><div class="m">M2</div><h3>AI 伙伴</h3><p>此刻首页、光球、对话点歌、歌词解读</p></div>
-    <div class="step rv"><i></i><div class="m">M3</div><h3>情绪星图</h3><p>本地特征、画线成歌单、情绪电台</p></div>
-    <div class="step rv"><i></i><div class="m">M4</div><h3>更远</h3><p>私有云音源、听歌日记、AI 作曲</p></div>
+<!-- 三步 -->
+<section class="sec" style="padding-top:40px"><div class="wrap">
+  <div class="center rv"><span class="kicker">上手</span><h2>三步用起来</h2></div>
+  <div class="steps" id="steps">
+    <div class="step rv d1"><i>1</i><h3>装好网易云</h3><p>歌都在网易云里放，登录你自己的账号</p></div>
+    <div class="step rv d2"><i>2</i><h3>打开通知使用权</h3><p>微光靠它读到正在放什么、控制播放</p></div>
+    <div class="step rv d3"><i>3</i><h3>同步歌单</h3><p>你的歌单带过来，星图和推荐就有了</p></div>
+  </div>
+</div></section>
+
+<!-- 下载 -->
+<section class="sec" id="download" style="padding-top:40px"><div class="wrap">
+  <div class="dl glass rv">
+    <div>
+      <div class="dl-head"><img src="logo.png" alt=""><div><h2>微光 Lumen</h2><div class="dl-meta" id="dlmeta">安卓 · 开源免费</div></div></div>
+      <div class="cta">
+        <a class="btn pri" href="download/weiguang.apk" download><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M5.5 8.5L10 13l4.5-4.5M4 16.5h12"/></svg>下载 APK<small class="dl-size"></small></a>
+        <a class="btn sec" href="https://github.com/Hector-xue/weiguang/releases" target="_blank" rel="noopener">GitHub Releases</a>
+      </div>
+      <p class="dl-req">需要安卓 8.0 以上和网易云音乐。想尝鲜最新改动可以装<a href="download/weiguang-dev.apk" download>开发版</a>。</p>
+    </div>
+    <div class="qr"><canvas id="qr" width="280" height="280"></canvas><span>手机扫码下载</span></div>
+  </div>
+</div></section>
+
+<!-- 问答 -->
+<section class="sec" id="faq" style="padding-top:40px"><div class="wrap">
+  <div class="center rv"><span class="kicker">问答</span><h2>你可能想问</h2></div>
+  <div class="faq rv d1">
+    <details><summary>微光能免费听所有歌吗？</summary><div class="ans"><p>微光不提供音源。歌都在你的网易云里放，会员和版权规则照网易云的来。</p></div></details>
+    <details><summary>为什么要「通知使用权」？</summary><div class="ans"><p>安卓只有给了这个权限，才能读到别的 App 正在放什么、帮你暂停和切歌。微光不读你的通知内容。</p></div></details>
+    <details><summary>点歌为什么会跳到网易云？</summary><div class="ans"><p>网易云只开放了按歌曲链接播放，所以会切过去。开着悬浮光球时，微光会试着自己跳回来。</p></div></details>
+    <details><summary>AI 要花钱吗？</summary><div class="ans"><p>填你自己的密钥，用多少付多少，DeepSeek 这类一般很便宜。不填也能用滚动歌词、常听习惯和基础的心情找歌。</p></div></details>
+    <details><summary>有 iOS 版吗？</summary><div class="ans"><p>暂时只有安卓。iOS 不允许读别的 App 的播放状态。</p></div></details>
   </div>
 </div></section>
 </main>
 
 <footer><div class="wrap foot">
-  <span class="logo" style="font-size:15px"><img src="logo.png" alt="" style="width:22px;height:22px">微光 Lumen</span>
-  <span>MIT 开源 · <a href="https://github.com/Hector-xue/weiguang" target="_blank" rel="noopener">GitHub</a> · <a href="https://ivyea.com" target="_blank" rel="noopener">ivyea</a></span>
+  <span class="brand"><img src="logo.png" alt="">微光 Lumen</span>
+  <nav><a href="https://github.com/Hector-xue/weiguang" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/Hector-xue/weiguang/releases" target="_blank" rel="noopener">更新记录</a><a href="https://ivyea.com" target="_blank" rel="noopener">Ivyea</a></nav>
+  <span>MIT 开源</span>
 </div></footer>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script>
 const DPR=Math.min(window.devicePixelRatio||1,2);
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const fxs=[];// {el, draw, vis}
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const fxs=[];
 function fit(c,scale){const w=c.clientWidth,h=c.clientHeight,k=DPR*(scale||1);c.width=Math.max(1,w*k|0);c.height=Math.max(1,h*k|0);const g=c.getContext('2d');g.setTransform(k,0,0,k,0,0);return {g,w,h};}
 function reg(el,mk){const o={el,vis:true};o.init=()=>{o.draw=mk();};o.init();fxs.push(o);return o;}
 function beat(t){return .5+.5*Math.pow(Math.abs(Math.sin(t*2.1)),6)*.9+.1*Math.sin(t*5.3);}
 function spec(i,n,t){const x=i/n;return Math.max(0,.35+.35*Math.sin(x*12+t*3)*Math.cos(x*5-t*1.7)+.3*Math.exp(-x*3)*beat(t));}
-function pwScale(){return document.querySelector('[data-pw]').style.getPropertyValue('--s')*1||1;}
+function lerp(a,b,k){return a+(b-a)*k}
+function mix(c1,c2,k){return c1.map((v,i)=>lerp(v,c2[i],k))}
+// 和 App 里星星同一套配色：横向明亮、纵向能量
+function feelRGB(v,e){const a=mix([143,168,232],[176,136,224],e),b=mix([159,208,192],[242,154,114],e);return mix(a,b,v).map(x=>x|0);}
+const rgb=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a==null?1:a})`;
 
-/* 手机样机缩放：窄屏按可用宽度缩，最大 0.92 */
-function scalePhones(){const vw=document.documentElement.clientWidth;const s=Math.min(.92,(vw-48)/375);document.querySelectorAll('[data-pw]').forEach(p=>p.style.setProperty('--s',s.toFixed(3)));}
+/* 手机样机缩放 */
+function scalePhones(){const vw=document.documentElement.clientWidth;const s=Math.min(.86,(vw-48)/375);$$('[data-pw]').forEach(p=>p.style.setProperty('--s',s.toFixed(3)));}
 scalePhones();
+const pwScale=()=>parseFloat(($('[data-pw]')||document.body).style.getPropertyValue('--s'))||1;
 
-/* 页面背景微尘 */
-reg(document.getElementById('dust'),()=>{const c=document.getElementById('dust');const s=fit(c);const n=Math.round(s.w*s.h/26000);
+/* ───── 心情（和 App 一致） ───── */
+const FEELS=[
+  {n:'低落',v:.2,e:.25,to:[.72,.5],say:'有点低落',r:'先陪你待一会儿，再慢慢亮起来'},
+  {n:'疲惫',v:.4,e:.12,to:[.62,.42],say:'好累',r:'不吵你，一点点把精神找回来'},
+  {n:'烦躁',v:.3,e:.8,to:[.55,.2],say:'心里很烦',r:'先顺着这股劲，再一点点静下来'},
+  {n:'想哭',v:.12,e:.15,say:'想哭',r:'想哭就哭一会儿，我在'},
+  {n:'平静',v:.55,e:.2,say:'挺平静的',r:'那就安安静静的'},
+  {n:'专注',v:.5,e:.35,say:'要专心做事',r:'不打扰你，这些适合专心'},
+  {n:'开心',v:.85,e:.65,say:'心情不错',r:'好心情，接着亮下去'},
+  {n:'想燃',v:.75,e:.92,say:'想燃一下',r:'音量调大'},
+];
+
+/* 说一句话：两行流动 */
+(function(){const a=['有点累','下雨了','通勤路上','失眠','想燃一下','周末的早晨','加班到很晚','想哭','专心写东西','刚下班','心里很烦','来点安静的','跑步','想念一个人','晴天','深夜一个人'];
+  const dot=()=>{const f=FEELS[Math.random()*FEELS.length|0];return rgb(feelRGB(f.v,f.e));};
+  const mk=list=>{const h=list.map(s=>`<span><b style="background:${dot()}"></b>${s}</span>`).join('');return h+h;};
+  $('#say1').innerHTML=mk(a.slice(0,8).concat(a.slice(8,12)));$('#say2').innerHTML=mk(a.slice(8).concat(a.slice(0,4)));})();
+
+/* ───── 标题逐字浮现 ───── */
+(function(){const h=$('#title');const walk=n=>{[...n.childNodes].forEach(c=>{if(c.nodeType===3){const f=document.createDocumentFragment();[...c.textContent].forEach(ch=>{const s=document.createElement('span');s.className='ch';s.textContent=ch;f.appendChild(s);});c.replaceWith(f);}else if(c.nodeName==='EM')c.classList.add('ch');else if(c.nodeName!=='BR')walk(c);});};
+  walk(h);$$('#title .ch').forEach((s,i)=>s.style.transitionDelay=(.15+i*.06)+'s');requestAnimationFrame(()=>requestAnimationFrame(()=>h.classList.add('in')));})();
+
+/* ───── 背景微尘 ───── */
+reg($('#dust'),()=>{const c=$('#dust');const s=fit(c);const n=Math.round(s.w*s.h/24000);
   const ps=Array.from({length:n},()=>({x:Math.random()*s.w,y:Math.random()*s.h,r:Math.random()*1.6+.4,v:Math.random()*.2+.04,p:Math.random()*6,h:Math.random()}));
   return t=>{const g=s.g;g.clearRect(0,0,s.w,s.h);for(const p of ps){p.y-=p.v;if(p.y<-4){p.y=s.h+4;p.x=Math.random()*s.w;}
     const a=.3+.4*Math.sin(t*1.3+p.p);g.fillStyle=p.h<.3?`rgba(255,190,150,${a})`:p.h<.55?`rgba(170,160,240,${a*.8})`:`rgba(255,255,255,${a+.2})`;
     g.beginPath();g.arc(p.x+Math.sin(t*.5+p.p)*8,p.y,p.r,0,7);g.fill();}};});
 
-/* ---------- 首屏大光球：三种状态 + 跟随指针 + 点击迸发 ---------- */
+/* ───── 首屏光球：聆听 / 思考 / 回应，跟随指针，点一下迸发 ───── */
 const STATES=[{n:'聆听中',c:[255,200,150],dot:'#ee8f6a',sp:.35,amp:1},{n:'思考中',c:[175,165,250],dot:'#8f86e0',sp:1.1,amp:.5},{n:'回应中',c:[255,170,190],dot:'#e98aa6',sp:.6,amp:1.6}];
-let si=0,mix=0,ptr={x:0,y:0,tx:0,ty:0,on:false},bursts=[];
-const orbEl=document.getElementById('orb');
+let si=0,ptr={x:0,y:0,tx:0,ty:0},bursts=[];
+const orbEl=$('#orb');
 reg(orbEl,()=>{const s=fit(orbEl);const N=s.w<420?700:1100,pts=[];
   for(let i=0;i<N;i++){const y=1-2*(i+.5)/N,r=Math.sqrt(1-y*y),th=i*2.39996;pts.push({x:Math.cos(th)*r,y,z:Math.sin(th)*r,j:Math.random()*6,o:0,ov:0});}
   const orbit=Array.from({length:120},()=>({a:Math.random()*7,rr:1.3+Math.random()*.75,sp:(Math.random()*.4+.12)*(Math.random()<.5?-1:1),tilt:Math.random()*.5-.25,r:Math.random()*1.2+.6}));
   let rot=0,col=[...STATES[0].c],sp=.35,amp=1;
   return (t,dt)=>{const g=s.g,cx=s.w/2,cy=s.h/2,st=STATES[si];
     for(let k=0;k<3;k++)col[k]+=(st.c[k]-col[k])*.04;sp+=(st.sp-sp)*.04;amp+=(st.amp-amp)*.04;
-    const b=beat(t*(si===1?.6:1)),R=Math.min(s.w,s.h)*.24*(1+b*.06*amp);
+    const b=beat(t*(si===1?.6:1)),R=Math.min(s.w,s.h)*.25*(1+b*.06*amp);
     rot+=sp*dt;ptr.x+=(ptr.tx-ptr.x)*.06;ptr.y+=(ptr.ty-ptr.y)*.06;
     const [cr,cg,cb]=col.map(v=>v|0);
     g.clearRect(0,0,s.w,s.h);
-    let gr=g.createRadialGradient(cx,cy,0,cx,cy,R*2.3);gr.addColorStop(0,`rgba(${cr},${cg},${cb},.7)`);gr.addColorStop(.35,`rgba(${cr},${cg-30},${cb-20},.28)`);gr.addColorStop(1,'rgba(200,180,245,0)');
-    g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R*2.3,0,7);g.fill();
-    for(let k=0;k<3;k++){const ph=((t*.3+k/3)%1);g.strokeStyle=`rgba(255,255,255,${.6*(1-ph)})`;g.lineWidth=1.2;g.beginPath();g.arc(cx,cy,R*(1.12+ph*1.1),0,7);g.stroke();}
+    let gr=g.createRadialGradient(cx,cy,0,cx,cy,R*2.2);gr.addColorStop(0,`rgba(${cr},${cg},${cb},.7)`);gr.addColorStop(.35,`rgba(${cr},${cg-30},${cb-20},.28)`);gr.addColorStop(1,'rgba(200,180,245,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R*2.2,0,7);g.fill();
+    for(let k=0;k<3;k++){const ph=((t*.3+k/3)%1);g.strokeStyle=`rgba(255,255,255,${.6*(1-ph)})`;g.lineWidth=1.2;g.beginPath();g.arc(cx,cy,R*(1.12+ph*1.05),0,7);g.stroke();}
     gr=g.createRadialGradient(cx-R*.25,cy-R*.3,R*.08,cx,cy,R);gr.addColorStop(0,'rgba(255,252,232,.97)');gr.addColorStop(.55,`rgba(${cr},${cg-10},${cb-30},.5)`);gr.addColorStop(1,`rgba(${cr},${cg-40},${cb-40},.06)`);
     g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R*.93,0,7);g.fill();
-    // 球面粒子（指针让球体倾斜，点击让粒子炸开后回弹）
     const ry=rot+ptr.x*.6,rx=.3+ptr.y*.5,c1=Math.cos(ry),s1=Math.sin(ry),c2=Math.cos(rx),s2=Math.sin(rx);
     for(const p of pts){p.ov+=(-p.o)*.06;p.ov*=.86;p.o+=p.ov;
       let x=p.x*c1+p.z*s1,z=-p.x*s1+p.z*c1,y=p.y*c2-z*s2;z=p.y*s2+z*c2;
       const wob=si===1?.05*Math.sin(t*6+p.j*3):.06*Math.sin(t*3+p.j)*b*amp;
       const d=1+wob+.04*b+p.o,px=cx+x*R*d,py=cy+y*R*d,dep=(z+1)/2;
-      g.fillStyle=`rgba(${255},${Math.min(255,cg+dep*40)|0},${Math.min(255,cb+dep*70)|0},${.12+dep*.8})`;g.beginPath();g.arc(px,py,.45+dep*1.7,0,7);g.fill();}
+      g.fillStyle=`rgba(255,${Math.min(255,cg+dep*40)|0},${Math.min(255,cb+dep*70)|0},${.12+dep*.8})`;g.beginPath();g.arc(px,py,.45+dep*1.7,0,7);g.fill();}
     for(const o of orbit){o.a+=o.sp*dt*1.2*(si===1?2:1);const x=Math.cos(o.a)*R*o.rr,y=Math.sin(o.a)*R*o.rr*.4+x*o.tilt;const f=Math.sin(o.a)>0;
       g.fillStyle=`rgba(255,255,255,${f?.95:.35})`;g.beginPath();g.arc(cx+x,cy+y,f?o.r*1.4:o.r*.8,0,7);g.fill();}
     for(let i=bursts.length-1;i>=0;i--){const q=bursts[i];q.l-=dt*.9;if(q.l<=0){bursts.splice(i,1);continue;}const rr=R*(1+(1-q.l)*1.8);
       g.strokeStyle=`rgba(${cr},${cg},${cb},${q.l*.8})`;g.lineWidth=2*q.l+.5;g.beginPath();g.arc(cx,cy,rr,0,7);g.stroke();}
-    gr=g.createRadialGradient(cx,cy+R*1.3,0,cx,cy+R*1.3,R*1.6);gr.addColorStop(0,`rgba(${cr},${cg},${cb},.28)`);gr.addColorStop(1,`rgba(${cr},${cg},${cb},0)`);
-    g.fillStyle=gr;g.beginPath();g.ellipse(cx,cy+R*1.3,R*1.6,8,0,0,7);g.fill();
     orbEl._pts=pts;};});
-function setState(i){si=i;document.getElementById('stxt').textContent=STATES[i].n;const d=document.getElementById('sdot');d.style.background=STATES[i].dot;d.style.boxShadow='0 0 8px '+STATES[i].dot;}
+function setState(i){si=i;$('#stxt').textContent=STATES[i].n;const d=$('#sdot');d.style.background=STATES[i].dot;d.style.boxShadow='0 0 8px '+STATES[i].dot;}
 let auto=setInterval(()=>setState((si+1)%3),4200);
-orbEl.addEventListener('pointermove',e=>{const r=orbEl.getBoundingClientRect();ptr.tx=((e.clientX-r.left)/r.width-.5)*2;ptr.ty=((e.clientY-r.top)/r.height-.5)*2;});
-orbEl.addEventListener('pointerleave',()=>{ptr.tx=ptr.ty=0;});
+addEventListener('pointermove',e=>{const r=orbEl.getBoundingClientRect();ptr.tx=Math.max(-1,Math.min(1,((e.clientX-r.left)/r.width-.5)*2));ptr.ty=Math.max(-1,Math.min(1,((e.clientY-r.top)/r.height-.5)*2));},{passive:true});
 orbEl.addEventListener('click',()=>{bursts.push({l:1});(orbEl._pts||[]).forEach(p=>p.ov+=.05+Math.random()*.12);clearInterval(auto);setState((si+1)%3);auto=setInterval(()=>setState((si+1)%3),4200);});
 
-/* ---------- 样机里的动效（与 App 设计稿同源） ---------- */
-document.querySelectorAll('.phone canvas.bg').forEach(c=>reg(c,()=>{const s=fit(c,pwScale());
-  const ps=Array.from({length:40},()=>({x:Math.random()*s.w,y:Math.random()*s.h,r:Math.random()*1.8+.4,v:Math.random()*.25+.05,p:Math.random()*6}));
+/* ───── 网易云 ⇄ 微光：两股粒子流 ───── */
+reg($('#bridge'),()=>{const c=$('#bridge');const s=fit(c);const vert=s.h>s.w*.9;
+  const ps=Array.from({length:70},(_,i)=>({k:Math.random(),sp:.12+Math.random()*.18,dir:i%2?1:-1,o:Math.random()*6,r:Math.random()*1.6+.8}));
+  return (t,dt)=>{const g=s.g;g.clearRect(0,0,s.w,s.h);
+    const path=(k,dir)=>{// 两条弧线：上去的一条、回来的一条
+      if(vert){const y=s.h*k,x=s.w/2+(dir>0?-1:1)*Math.sin(k*Math.PI)*40;return [x,y];}
+      const x=s.w*k,y=s.h/2+(dir>0?-1:1)*Math.sin(k*Math.PI)*42;return [x,y];};
+    for(const dir of [1,-1]){g.beginPath();for(let k=0;k<=1.001;k+=.02){const [x,y]=path(k,dir);k?g.lineTo(x,y):g.moveTo(x,y);}
+      g.strokeStyle=dir>0?'rgba(238,143,106,.22)':'rgba(143,134,224,.22)';g.lineWidth=1.2;g.setLineDash([3,6]);g.lineDashOffset=-t*18*dir;g.stroke();g.setLineDash([]);}
+    for(const p of ps){p.k+=p.sp*dt*p.dir*.5;if(p.k>1)p.k-=1;if(p.k<0)p.k+=1;const [x,y]=path(p.k,p.dir);const a=Math.sin(p.k*Math.PI);
+      const c0=p.dir>0?[238,143,106]:[143,134,224];
+      const gr=g.createRadialGradient(x,y,0,x,y,p.r*5);gr.addColorStop(0,rgb(c0,.5*a));gr.addColorStop(1,rgb(c0,0));g.fillStyle=gr;g.beginPath();g.arc(x,y,p.r*5,0,7);g.fill();
+      g.fillStyle=`rgba(255,255,255,${.9*a})`;g.beginPath();g.arc(x,y,p.r,0,7);g.fill();}};});
+
+/* ───── 情绪星图（可点） ───── */
+const TITLES=['雨停之前','旧街灯','慢一点','海风信','夜航','第七天','微凉','晴空下','云朵收集者','候鸟','失眠的月亮','把灯关掉','橘子汽水','夏天的尾巴','山顶的风','深蓝','小城日记','向光','心跳加速','奔跑','在路上','碎片','时间的河','安静的城','晚安','星星落下','远方来信','如果明天下雨','灯塔','早安','明天见','落日飞行','你好呀','慢慢亮','窗外','十七岁','白日梦','回声','人海','冬眠','好天气','逆风','热气球','慢车','雾','月台','飞鸟','纸飞机','燃烧','极光','清晨','小雨','流星','灰色','蓝调','长街','出发','回家'];
+let seed=11;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const STARS=TITLES.map(t=>{const v=Math.min(.96,Math.max(.04,rnd()*.96)),e=Math.min(.96,Math.max(.04,rnd()*.96));return {t,v,e,c:feelRGB(v,e),r:rnd()*1.6+1.6,p:rnd()*6};});
+function walk(f){const d2=(s,v,e)=>(s.v-v)**2+(s.e-e)**2;
+  if(!f.to)return STARS.slice().sort((a,b)=>d2(a,f.v,f.e)-d2(b,f.v,f.e)).slice(0,6);
+  const used=new Set(),out=[],n=8;for(let i=0;i<n;i++){const k=Math.min(1,Math.max(0,(i-2)/(n-3)));const v=lerp(f.v,f.to[0],k),e=lerp(f.e,f.to[1],k);
+    const s=STARS.filter(x=>!used.has(x)).sort((a,b)=>d2(a,v,e)-d2(b,v,e))[0];used.add(s);out.push(s);}return out;}
+let route=null,routeAt=0,feelIdx=-1;
+function pickFeel(i,user){feelIdx=i;const f=FEELS[i];route=walk(f);routeAt=performance.now();
+  $$('#chips .chip').forEach((c,j)=>c.classList.toggle('on',j===i));
+  $('#sayit').textContent='「'+f.say+'」 '+f.r;
+  const box=$('#picks');box.innerHTML=route.slice(0,6).map((s,j)=>`<div><b style="background:${rgb(s.c)};box-shadow:0 0 8px ${rgb(s.c)}"></b>${s.t}<em>${j+1}</em></div>`).join('');
+  [...box.children].forEach((d,j)=>setTimeout(()=>d.classList.add('in'),500+j*220));
+  if(user)clearInterval(feelTimer);}
+$('#chips').innerHTML=FEELS.map(f=>{const c=rgb(feelRGB(f.v,f.e));return `<button class="chip" style="--c:${c}"><b style="background:${c};box-shadow:0 0 8px ${c}"></b>${f.n}</button>`;}).join('');
+$$('#chips .chip').forEach((c,i)=>c.addEventListener('click',()=>pickFeel(i,true)));
+let feelTimer=setInterval(()=>{if(fxs.find(o=>o.el===$('#mapc'))?.vis)pickFeel([0,2,1,3][(([0,2,1,3].indexOf(feelIdx))+1)%4],false);},7000);
+reg($('#mapc'),()=>{const c=$('#mapc');const s=fit(c);
+  return t=>{const g=s.g,W=s.w,H=s.h,P=26;g.clearRect(0,0,W,H);
+    const X=v=>P+v*(W-2*P),Y=e=>P+12+(1-e)*(H-2*P-12);
+    g.strokeStyle='rgba(120,110,170,.07)';g.lineWidth=1;for(let i=1;i<4;i++){g.beginPath();g.moveTo(W*i/4,0);g.lineTo(W*i/4,H);g.stroke();g.beginPath();g.moveTo(0,H*i/4);g.lineTo(W,H*i/4);g.stroke();}
+    const on=route?new Set(route):null;
+    for(const p of STARS){const a=.45+.45*Math.sin(t*1.8+p.p),x=X(p.v),y=Y(p.e),dim=on&&!on.has(p)?.35:1;
+      g.globalAlpha=a*.4*dim;g.fillStyle=rgb(p.c);g.beginPath();g.arc(x,y,p.r*3.6,0,7);g.fill();g.globalAlpha=(.7+a*.3)*dim;g.beginPath();g.arc(x,y,p.r*1.25,0,7);g.fill();g.fillStyle='#fff';g.globalAlpha=.8*dim;g.beginPath();g.arc(x,y,p.r*.45,0,7);g.fill();}
+    g.globalAlpha=1;
+    if(!route)return;
+    const pts=route.map(s=>[X(s.v),Y(s.e)]),el=(performance.now()-routeAt)/1000,draw=Math.min(1,el/1.6),segs=draw*(pts.length-1);
+    const lg=g.createLinearGradient(pts[0][0],pts[0][1],pts.at(-1)[0],pts.at(-1)[1]);lg.addColorStop(0,rgb(route[0].c));lg.addColorStop(1,rgb(route.at(-1).c));
+    g.strokeStyle=lg;g.lineWidth=2.6;g.lineCap='round';g.lineJoin='round';g.setLineDash([2,7]);g.lineDashOffset=-t*22;g.beginPath();g.moveTo(...pts[0]);
+    for(let i=1;i<pts.length;i++){if(i-1>=segs)break;const u=Math.min(1,segs-(i-1));g.lineTo(lerp(pts[i-1][0],pts[i][0],u),lerp(pts[i-1][1],pts[i][1],u));}g.stroke();g.setLineDash([]);
+    pts.forEach((q,i)=>{if(i>segs+.01)return;const pop=Math.min(1,(segs-i+1)*1.5);g.fillStyle='#fff';g.beginPath();g.arc(q[0],q[1],4.5*pop,0,7);g.fill();g.strokeStyle=rgb(route[i].c);g.lineWidth=2;g.stroke();});
+    if(draw>=1){const cyc=((el-1.6)%6)/6,seg=cyc*(pts.length-1),i0=Math.min(pts.length-2,seg|0),u=seg-i0,hx=lerp(pts[i0][0],pts[i0+1][0],u),hy=lerp(pts[i0][1],pts[i0+1][1],u);
+      const gr=g.createRadialGradient(hx,hy,0,hx,hy,26);gr.addColorStop(0,'rgba(255,236,200,.95)');gr.addColorStop(1,'rgba(255,200,150,0)');g.fillStyle=gr;g.beginPath();g.arc(hx,hy,26,0,7);g.fill();}};});
+$('#mapc').addEventListener('click',e=>{// 点星星：挑最近的那颗所在的心情
+  const r=e.currentTarget.getBoundingClientRect(),v=(e.clientX-r.left)/r.width,en=1-(e.clientY-r.top)/r.height;
+  let bi=0,bd=9;FEELS.forEach((f,i)=>{const d=(f.v-v)**2+(f.e-en)**2;if(d<bd){bd=d;bi=i;}});pickFeel(bi,true);});
+
+/* ───── 样机：背景微尘 / 小光球 / 频谱环 ───── */
+$$('.phone canvas.bg').forEach(c=>reg(c,()=>{const s=fit(c,pwScale());
+  const ps=Array.from({length:36},()=>({x:Math.random()*s.w,y:Math.random()*s.h,r:Math.random()*1.8+.4,v:Math.random()*.25+.05,p:Math.random()*6}));
   return t=>{const g=s.g;g.clearRect(0,0,s.w,s.h);for(const p of ps){p.y-=p.v;if(p.y<-5){p.y=s.h+5;p.x=Math.random()*s.w;}
     g.fillStyle=`rgba(255,255,255,${.35+.35*Math.sin(t*1.5+p.p)})`;g.beginPath();g.arc(p.x+Math.sin(t*.6+p.p)*6,p.y,p.r,0,7);g.fill();}};}));
-
-document.querySelectorAll('[data-fx=orb]').forEach(c=>reg(c,()=>{const s=fit(c,pwScale());const N=420,pts=[];
+$$('[data-fx=orb]').forEach(c=>reg(c,()=>{const s=fit(c,pwScale());const N=380,pts=[];
   for(let i=0;i<N;i++){const y=1-2*(i+.5)/N,r=Math.sqrt(1-y*y),th=i*2.39996;pts.push({x:Math.cos(th)*r,y,z:Math.sin(th)*r,j:Math.random()*6});}
-  const orbit=Array.from({length:70},()=>({a:Math.random()*7,rr:1.35+Math.random()*.6,sp:(Math.random()*.4+.15)*(Math.random()<.5?-1:1),tilt:Math.random()*.5-.25}));
-  return t=>{const g=s.g,cx=s.w/2,cy=s.h/2,b=beat(t),R=74+b*8;g.clearRect(0,0,s.w,s.h);
+  return t=>{const g=s.g,cx=s.w/2,cy=s.h/2,b=beat(t),R=58+b*6;g.clearRect(0,0,s.w,s.h);
     let gr=g.createRadialGradient(cx,cy,0,cx,cy,R*2.1);gr.addColorStop(0,'rgba(255,214,150,.75)');gr.addColorStop(.35,'rgba(255,170,130,.35)');gr.addColorStop(1,'rgba(200,180,245,0)');g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R*2.1,0,7);g.fill();
     for(let k=0;k<3;k++){const ph=((t*.35+k/3)%1);g.strokeStyle=`rgba(255,255,255,${.55*(1-ph)})`;g.lineWidth=1.2;g.beginPath();g.arc(cx,cy,R*(1.15+ph*.9),0,7);g.stroke();}
     gr=g.createRadialGradient(cx-R*.25,cy-R*.3,R*.1,cx,cy,R);gr.addColorStop(0,'rgba(255,250,225,.95)');gr.addColorStop(.55,'rgba(255,190,120,.55)');gr.addColorStop(1,'rgba(240,140,110,.08)');g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R*.92,0,7);g.fill();
     const ry=t*.35,rx=.35,c1=Math.cos(ry),s1=Math.sin(ry),c2=Math.cos(rx),s2=Math.sin(rx);
     for(const p of pts){let x=p.x*c1+p.z*s1,z=-p.x*s1+p.z*c1,y=p.y*c2-z*s2;z=p.y*s2+z*c2;const d=1+.06*Math.sin(t*3+p.j)*b+.05*b,dep=(z+1)/2;
-      g.fillStyle=`rgba(255,${200+dep*50|0},${160+dep*80|0},${.15+dep*.75})`;g.beginPath();g.arc(cx+x*R*d,cy+y*R*d,.5+dep*1.6,0,7);g.fill();}
-    for(const o of orbit){o.a+=o.sp*.012;const x=Math.cos(o.a)*R*o.rr,y=Math.sin(o.a)*R*o.rr*.42+x*o.tilt,f=Math.sin(o.a)>0;g.fillStyle=`rgba(255,255,255,${f?.9:.35})`;g.beginPath();g.arc(cx+x,cy+y,f?1.6:1,0,7);g.fill();}
-    gr=g.createLinearGradient(0,cy+R*1.05,0,s.h);gr.addColorStop(0,'rgba(255,220,170,.35)');gr.addColorStop(1,'rgba(255,220,170,0)');g.fillStyle=gr;g.beginPath();g.ellipse(cx,cy+R*1.2,R*1.9,10,0,0,7);g.fill();};}));
-
-document.querySelectorAll('[data-fx=ring]').forEach(c=>reg(c,()=>{const s=fit(c,pwScale());const n=120,spark=[];
-  return t=>{const g=s.g,cx=s.w/2,cy=s.h/2,R0=110;g.clearRect(0,0,s.w,s.h);
-    const gr=g.createRadialGradient(cx,cy,R0*.8,cx,cy,R0*1.7);gr.addColorStop(0,'rgba(255,190,150,.35)');gr.addColorStop(1,'rgba(185,179,242,0)');g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R0*1.7,0,7);g.fill();
-    for(let i=0;i<n;i++){const a=i/n*Math.PI*2-Math.PI/2+t*.05,v=spec(i<n/2?i:n-i,n/2,t),L=6+v*44,steps=Math.max(2,L/5|0),hue=i/n;
+      g.fillStyle=`rgba(255,${200+dep*50|0},${160+dep*80|0},${.15+dep*.75})`;g.beginPath();g.arc(cx+x*R*d,cy+y*R*d,.5+dep*1.5,0,7);g.fill();}};}));
+$$('[data-fx=ring]').forEach(c=>reg(c,()=>{const s=fit(c,pwScale());const n=120,spark=[];
+  return t=>{const g=s.g,cx=s.w/2,cy=s.h/2,R0=100;g.clearRect(0,0,s.w,s.h);
+    const gr=g.createRadialGradient(cx,cy,R0*.8,cx,cy,R0*1.6);gr.addColorStop(0,'rgba(255,190,150,.35)');gr.addColorStop(1,'rgba(185,179,242,0)');g.fillStyle=gr;g.beginPath();g.arc(cx,cy,R0*1.6,0,7);g.fill();
+    for(let i=0;i<n;i++){const a=i/n*Math.PI*2-Math.PI/2+t*.05,v=spec(i<n/2?i:n-i,n/2,t),L=6+v*40,steps=Math.max(2,L/5|0),hue=i/n;
       const col=`rgba(${240-hue*80|0},${150+hue*40|0},${120+hue*120|0},`;
       for(let k=0;k<steps;k++){const rr=R0+k*5;g.fillStyle=col+(1-k/steps*.8)+')';g.beginPath();g.arc(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr,1.7-k/steps,0,7);g.fill();}
       if(v>.85&&Math.random()<.08)spark.push({x:cx+Math.cos(a)*(R0+L),y:cy+Math.sin(a)*(R0+L),vx:Math.cos(a)*.8,vy:Math.sin(a)*.8,l:1});}
     for(let i=spark.length-1;i>=0;i--){const p=spark[i];p.x+=p.vx;p.y+=p.vy;p.l-=.015;if(p.l<=0){spark.splice(i,1);continue;}g.fillStyle=`rgba(255,255,255,${p.l})`;g.beginPath();g.arc(p.x,p.y,1.4,0,7);g.fill();}};}));
 
-document.querySelectorAll('[data-fx=map]').forEach(c=>reg(c,()=>{const s=fit(c,pwScale());const st=[];
-  const cl=[[.25,.25,'#8fa8e8'],[.7,.7,'#f29a72'],[.75,.3,'#f3c96b'],[.3,.72,'#b088e0'],[.5,.5,'#9fd0c0']];
-  let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
-  for(let i=0;i<150;i++){const k=cl[i%5];st.push({x:Math.min(.95,Math.max(.05,k[0]+(rnd()-.5)*.36)),y:Math.min(.95,Math.max(.05,k[1]+(rnd()-.5)*.36)),c:k[2],r:rnd()*1.8+1,p:rnd()*6});}
-  const path=[[.18,.2],[.3,.3],[.42,.4],[.55,.5],[.68,.62],[.8,.72]];
-  return t=>{const g=s.g,W=s.w,H=s.h;g.clearRect(0,0,W,H);
-    g.strokeStyle='rgba(120,110,170,.08)';g.lineWidth=1;for(let i=1;i<4;i++){g.beginPath();g.moveTo(W*i/4,0);g.lineTo(W*i/4,H);g.stroke();g.beginPath();g.moveTo(0,H*i/4);g.lineTo(W,H*i/4);g.stroke();}
-    for(const p of st){const a=.45+.45*Math.sin(t*1.8+p.p),x=p.x*W,y=(1-p.y)*H;g.globalAlpha=a*.35;g.fillStyle=p.c;g.beginPath();g.arc(x,y,p.r*3.2,0,7);g.fill();g.globalAlpha=.55+a*.45;g.beginPath();g.arc(x,y,p.r,0,7);g.fill();}
-    g.globalAlpha=1;
-    // 画线动画：线条循环"画出来"，再沿线播放
-    const P=path.map(([x,y])=>[x*W,(1-y)*H]),cyc=(t%10)/10,draw=Math.min(1,cyc/.3);
-    const lg=g.createLinearGradient(P[0][0],P[0][1],P[5][0],P[5][1]);lg.addColorStop(0,'#8fa8e8');lg.addColorStop(1,'#f29a72');
-    g.strokeStyle=lg;g.lineWidth=2.4;g.lineCap='round';g.setLineDash([2,7]);g.lineDashOffset=-t*20;g.beginPath();g.moveTo(...P[0]);
-    const segs=draw*5;for(let i=1;i<=5;i++){if(i-1>=segs)break;const u=Math.min(1,segs-(i-1));g.lineTo(P[i-1][0]+(P[i][0]-P[i-1][0])*u,P[i-1][1]+(P[i][1]-P[i-1][1])*u);}g.stroke();g.setLineDash([]);
-    P.forEach((q,i)=>{if(i>segs+.01)return;g.fillStyle='#fff';g.beginPath();g.arc(q[0],q[1],4,0,7);g.fill();g.strokeStyle=i<3?'#8fa8e8':'#f29a72';g.lineWidth=1.5;g.stroke();});
-    if(draw>=1){const f=(cyc-.3)/.7,seg=f*5,i0=Math.min(4,seg|0),u=seg-i0,a0=P[i0],a1=P[i0+1],hx=a0[0]+(a1[0]-a0[0])*u,hy=a0[1]+(a1[1]-a0[1])*u;
-      const gr=g.createRadialGradient(hx,hy,0,hx,hy,22);gr.addColorStop(0,'rgba(255,230,190,.95)');gr.addColorStop(1,'rgba(255,200,150,0)');g.fillStyle=gr;g.beginPath();g.arc(hx,hy,22,0,7);g.fill();}
-  };}));
+/* 懂你：心里话打字 + 心情轮流亮 */
+(function(){const lines=['夜深了，这几首是你最近常在这个点听的。','下雨天，给你留了三首慢一点的。','今天也辛苦了，放首喜欢的歌吧。'];
+  const el=$('#think');let li=0,ci=0,del=false;
+  $('#pfeel').innerHTML=FEELS.map(f=>`<span><b style="background:${rgb(feelRGB(f.v,f.e))}"></b>${f.n}</span>`).join('');
+  const chips=$$('#pfeel span');let fi=0;
+  setInterval(()=>{chips.forEach((c,j)=>c.classList.toggle('on',j===fi));fi=(fi+1)%chips.length;},1600);
+  (function type(){const s=lines[li];if(!del){ci++;el.textContent=s.slice(0,ci);if(ci>=s.length){del=true;return setTimeout(type,2600);}}
+    else{ci-=2;el.textContent=s.slice(0,Math.max(0,ci));if(ci<=0){del=false;ci=0;li=(li+1)%lines.length;}}setTimeout(type,del?28:90);})();})();
+
+/* 歌词：自己写的示例歌词，逐句滚动；隔几句弹出一次解读 */
+(function(){const L=[['窗外的雨下了一整夜',''],['我把灯调暗一点','Dim the light a little'],['等风把云吹散','Wait for the wind'],['等天边慢慢亮起来','Until the sky turns bright'],['你说别急',''],['光会自己找到路','Light finds its own way'],['我们就慢慢走','Take it slow'],['走到有光的地方','To where the light is']];
+  const ul=$('#lyr');ul.innerHTML=L.map(([a,b])=>`<li>${a}${b?`<small>${b}</small>`:''}</li>`).join('');
+  const lis=[...ul.children];let i=0;const ask=$('#ask');
+  const ANS={3:'天亮在这里不只是时间，是心情的转折：前面一直在「等」，这一句第一次看见变化。',5:'把光写成会找路的东西，是在安慰人：不用逼自己，好起来会自然发生。'};
+  function step(){lis.forEach((li,j)=>{li.classList.toggle('on',j===i);li.classList.toggle('near',Math.abs(j-i)===1);});ul.style.transform=`translateY(${75-i*50}px)`;
+    if(ANS[i]){setTimeout(()=>{$('#askq').textContent='「'+L[i][0]+'」';$('#aska').textContent=ANS[i];ask.classList.add('in');},900);setTimeout(()=>ask.classList.remove('in'),4600);}
+    const wait=ANS[i]?5200:2200;i=(i+1)%L.length;setTimeout(step,wait);}
+  step();})();
 
 /* 只画看得见的画布 */
 const io=new IntersectionObserver(es=>es.forEach(e=>{const o=fxs.find(f=>f.el===e.target);if(o)o.vis=e.isIntersecting;}),{rootMargin:'120px'});
 fxs.forEach(o=>{if(o.el.id!=='dust')io.observe(o.el);});
-
 let last=performance.now(),t0=last;
 function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;const t=(now-t0)/1000;fxs.forEach(o=>{if(o.vis)o.draw(t,dt);});if(!RM)requestAnimationFrame(loop);}
 requestAnimationFrame(loop);
 if(RM)setTimeout(()=>fxs.forEach(o=>o.draw(1.2,.016)),50);
+let rt,lastW=innerWidth;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(innerWidth===lastW)return;lastW=innerWidth;scalePhones();fxs.forEach(o=>o.init());movePill();},200);});
 
-// 手机上地址栏伸缩也会触发 resize，只在宽度变了才重建画布，免得粒子闪一下重来
-let rt,lastW=innerWidth;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(innerWidth===lastW)return;lastW=innerWidth;scalePhones();fxs.forEach(o=>o.init());},200);});
+/* ───── 顶栏：滚动收成胶囊；光点跟着悬停/当前分节滑动 ───── */
+const nav=$('#nav'),pill=$('#pill'),links=$$('#links a');let active=null,hover=null,navOn=false,tick=false;
+function movePill(){const a=hover||active;if(!a){pill.style.opacity=0;return;}pill.style.opacity=1;pill.style.left=a.offsetLeft+'px';pill.style.width=a.offsetWidth+'px';}
+links.forEach(a=>{a.addEventListener('mouseenter',()=>{hover=a;movePill();});});
+$('#links').addEventListener('mouseleave',()=>{hover=null;movePill();});
+function navSync(){tick=false;const on=scrollY>24;if(on!==navOn){navOn=on;nav.classList.toggle('scrolled',on);setTimeout(movePill,620);}
+  // 按页面顺序找当前分节；落在没有导航项的分节（下载）时光点隐去
+  let cur=null;for(const sec of $$('main section[id]')){if(sec.getBoundingClientRect().top<innerHeight*.45)cur=links.find(a=>a.getAttribute('href')==='#'+sec.id)||null;}
+  if(scrollY<innerHeight*.5)cur=null;
+  if(cur!==active){active=cur;links.forEach(a=>a.classList.toggle('on',a===cur));movePill();}}
+addEventListener('scroll',()=>{if(!tick){tick=true;requestAnimationFrame(navSync);}},{passive:true});navSync();
 
-/* 顶栏、进场 */
-const hd=document.getElementById('hd');addEventListener('scroll',()=>hd.classList.toggle('on',scrollY>20),{passive:true});
-const rio=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');rio.unobserve(e.target);}}),{threshold:.15});
-document.querySelectorAll('.rv').forEach(el=>rio.observe(el));
+/* 指针柔光 + 卡片高光 */
+const glow=$('#glow');if(matchMedia('(pointer:fine)').matches&&!RM){let gx=-999,gy=-999,tx=-999,ty=-999;
+  addEventListener('pointermove',e=>{tx=e.clientX;ty=e.clientY;if(gx<-900){gx=tx;gy=ty;}},{passive:true});
+  (function f(){gx+=(tx-gx)*.08;gy+=(ty-gy)*.08;glow.style.transform=`translate3d(${gx}px,${gy}px,0)`;requestAnimationFrame(f);})();}
+$$('.card').forEach(c=>c.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px');}));
+
+/* 进场 */
+const rio=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');rio.unobserve(e.target);}}),{threshold:.14});
+$$('.rv,#steps').forEach(el=>rio.observe(el));
+const mio=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting&&feelIdx<0){pickFeel(0,false);mio.disconnect();}}),{threshold:.4});mio.observe($('#map'));
+
+/* 问答：高度过渡 */
+$$('.faq details').forEach(d=>{const s=d.querySelector('summary'),a=d.querySelector('.ans');
+  s.addEventListener('click',e=>{e.preventDefault();if(d.open){a.style.height=a.scrollHeight+'px';requestAnimationFrame(()=>a.style.height='0px');setTimeout(()=>d.open=false,420);}
+    else{d.open=true;a.style.height='0px';requestAnimationFrame(()=>a.style.height=a.scrollHeight+'px');setTimeout(()=>a.style.height='auto',460);}});});
+
+/* 版本信息：发版时由 Pages 流程写入 download/latest.json */
+fetch('download/latest.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{if(!j||!j.tag)return;
+  const mb=j.size?(j.size/1048576).toFixed(1)+' MB':'';const day=j.at?j.at.slice(0,10):'';
+  $$('.dl-size').forEach(e=>e.textContent=[j.tag,mb].filter(Boolean).join(' · '));
+  $$('.ver-tag').forEach(e=>e.textContent=j.tag+' · 开源免费');
+  $('#dlmeta').textContent=[j.tag,mb,day&&day+' 发布'].filter(Boolean).join(' · ');}).catch(()=>{});
+
+/* 二维码：圆点风格，扫了直接下载 */
+addEventListener('load',()=>{if(!window.qrcode)return;try{const q=qrcode(0,'M');q.addData('https://wg.ivyea.com/download/weiguang.apk');q.make();
+  const n=q.getModuleCount(),c=$('#qr'),g=c.getContext('2d'),S=c.width,cell=S/(n+2);g.clearRect(0,0,S,S);
+  const eye=(r,cc)=>(r<7&&cc<7)||(r<7&&cc>=n-7)||(r>=n-7&&cc<7);
+  for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++){if(!q.isDark(r,cc)||eye(r,cc))continue;const k=(r+cc)/(2*n);g.fillStyle=rgb(mix([238,143,106],[143,134,224],k));g.beginPath();g.arc((cc+1.5)*cell,(r+1.5)*cell,cell*.42,0,7);g.fill();}
+  [[0,0],[0,n-7],[n-7,0]].forEach(([r,cc])=>{const x=(cc+1)*cell,y=(r+1)*cell;g.strokeStyle='#34324d';g.lineWidth=cell;g.beginPath();g.roundRect(x+cell/2,y+cell/2,cell*6,cell*6,cell*1.6);g.stroke();g.fillStyle='#ee8f6a';g.beginPath();g.roundRect(x+cell*2,y+cell*2,cell*3,cell*3,cell);g.fill();});
+}catch(_){}});
 </script>
 </body>
 </html>

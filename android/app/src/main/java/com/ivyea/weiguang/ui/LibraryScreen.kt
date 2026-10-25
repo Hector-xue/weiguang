@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,9 @@ import com.ivyea.weiguang.core.Ncm
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.Playlist
 import com.ivyea.weiguang.core.Song
+import com.ivyea.weiguang.core.rememberArt
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.launch
 
 private fun ago(at: Long): String {
@@ -76,7 +80,7 @@ private fun ago(at: Long): String {
     }
 }
 
-// 歌单封面没有图，按名字挑一组柔和渐变
+// 封面还没加载出来（或这张歌单没有）时，按名字挑一组柔和渐变垫底
 private val tiles = listOf(
     Color(0xFFC8C2F2) to Color(0xFFF6C9B8),
     Color(0xFFFFE2A8) to Color(0xFFF6AB86),
@@ -275,16 +279,28 @@ private fun Tabs(tab: Int, accent: Color, onTab: (Int) -> Unit) {
     }
 }
 
+// 歌单封面 = 第一首歌的专辑图，上面压一层浅色渐变放首字
+@Composable
+private fun PlaylistArt(p: Playlist, modifier: Modifier, radius: Int, big: Boolean) {
+    val (c1, c2) = tileOf(p.name)
+    // 读一下 state，封面地址补上来时会重组
+    Library.state.collectAsState().value
+    val url = Library.coverOf(p)
+    val img = rememberArt(url, 360)
+    Box(modifier.clip(RoundedCornerShape(radius.dp)).background(Brush.linearGradient(listOf(c1, c2))), contentAlignment = Alignment.BottomStart) {
+        if (img != null) {
+            Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent, Color(0x55302A50)))))
+        } else {
+            Text(p.name.take(1), fontSize = if (big) 26.sp else 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.92f), modifier = Modifier.padding(12.dp))
+        }
+    }
+}
+
 @Composable
 private fun PlaylistCard(p: Playlist, modifier: Modifier, onClick: () -> Unit) {
-    val (c1, c2) = tileOf(p.name)
     Column(modifier.glass(20.dp, 4.dp).clickable(onClick = onClick).padding(10.dp)) {
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(1.5f).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(c1, c2))),
-            contentAlignment = Alignment.BottomStart,
-        ) {
-            Text(p.name.take(1), fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.92f), modifier = Modifier.padding(12.dp))
-        }
+        PlaylistArt(p, Modifier.fillMaxWidth().aspectRatio(1f), 14, true)
         Text(p.name, fontSize = 14.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp, start = 2.dp))
         Text("${p.songIds.size} 首", fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 2.dp, start = 2.dp, bottom = 2.dp))
     }
@@ -292,13 +308,10 @@ private fun PlaylistCard(p: Playlist, modifier: Modifier, onClick: () -> Unit) {
 
 @Composable
 private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () -> Unit, onPlayAll: () -> Unit) {
-    val (c1, c2) = tileOf(p.name)
     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Text("‹ 曲库", fontSize = 14.sp, color = Wg.ink2, modifier = Modifier.clickable(onClick = onBack).padding(vertical = 6.dp))
         Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(c1, c2))), contentAlignment = Alignment.Center) {
-                Text(p.name.take(1), fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-            }
+            PlaylistArt(p, Modifier.size(96.dp).shadow(16.dp, RoundedCornerShape(20.dp), spotColor = accent), 20, false)
             Column(Modifier.padding(start = 14.dp)) {
                 Text(p.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("$count 首", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(top = 4.dp))
@@ -329,10 +342,11 @@ private fun SongRow(s: Song, now: Now?, accent: Color, extra: String?, onClick: 
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick)
             .background(if (playing) accent.copy(alpha = 0.10f) else Color.Transparent)
-            .padding(horizontal = 10.dp, vertical = 12.dp),
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Thumb(s, 42)
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(
                 s.title, fontSize = 15.sp, color = if (playing) accent else Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontWeight = if (playing) FontWeight.SemiBold else FontWeight.Normal,

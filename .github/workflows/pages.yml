@@ -30,10 +30,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p site/download
-          gh release download dev -p weiguang.apk -D site/download -R "$GITHUB_REPOSITORY" || echo "还没有开发版"
-          gh release download probe -p weiguang-probe.apk -D site/download -R "$GITHUB_REPOSITORY" || echo "没有验证工具"
-          ls -la site/download
+          mkdir -p site/download "$RUNNER_TEMP/dev"
+          R="$GITHUB_REPOSITORY"
+          # 正式版（Latest）→ weiguang.apk；开发版 → weiguang-dev.apk；还没有正式版时先用开发版顶上
+          gh release download dev -p weiguang.apk -D "$RUNNER_TEMP/dev" -R "$R" || echo "没有开发版"
+          [ -f "$RUNNER_TEMP/dev/weiguang.apk" ] && cp "$RUNNER_TEMP/dev/weiguang.apk" site/download/weiguang-dev.apk
+          if TAG=$(gh release view -R "$R" --json tagName -q .tagName 2>/dev/null) && [ -n "$TAG" ]; then
+            gh release download "$TAG" -p weiguang.apk -D site/download -R "$R"
+            gh release view "$TAG" -R "$R" --json tagName,publishedAt,assets \
+              -q '{tag: .tagName, at: .publishedAt, size: (.assets[] | select(.name=="weiguang.apk") | .size)}' > site/download/latest.json
+          elif [ -f "$RUNNER_TEMP/dev/weiguang.apk" ]; then
+            cp "$RUNNER_TEMP/dev/weiguang.apk" site/download/weiguang.apk
+          fi
+          gh release download probe -p weiguang-probe.apk -D site/download -R "$R" || echo "没有验证工具"
+          ls -la site/download; cat site/download/latest.json 2>/dev/null || true
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

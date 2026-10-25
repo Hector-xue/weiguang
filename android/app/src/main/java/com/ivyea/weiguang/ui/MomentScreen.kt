@@ -62,6 +62,10 @@ import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.R
 import com.ivyea.weiguang.core.Ai
 import com.ivyea.weiguang.core.Buddy
+import com.ivyea.weiguang.core.Feel
+import com.ivyea.weiguang.core.Feels
+import com.ivyea.weiguang.core.Song
+import com.ivyea.weiguang.core.rememberArt
 import com.ivyea.weiguang.core.Library
 import com.ivyea.weiguang.core.Msg
 import com.ivyea.weiguang.core.Ncm
@@ -99,7 +103,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
 
         // 光球 + 心里话：聊起来以后收小，把位置让给对话
         val compact = msgs.isNotEmpty()
-        Box(Modifier.fillMaxWidth().height(if (compact) 120.dp else 230.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(if (compact) 120.dp else 200.dp), contentAlignment = Alignment.Center) {
             ParticleOrb(
                 Modifier.fillMaxSize(), time,
                 {
@@ -132,11 +136,15 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
             state = list,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (msgs.isEmpty()) {
+                item { FeelCard { f -> scope.launch { Buddy.feel(f) } } }
+                item { Habit(accent) }
+            }
             items(msgs) { m -> Bubble(m, accent) }
             if (busy) item { Typing() }
         }
 
-        if (!busy) {
+        if (!busy && msgs.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 suggestions.forEach { s ->
                     Text(
@@ -214,12 +222,23 @@ private fun Bubble(m: Msg, accent: Color) {
                 m.songs.forEach { id ->
                     val s = songs[id] ?: return@forEach
                     Row(
-                        Modifier.fillMaxWidth().clickable { Ncm.playSong(ctx, id) }.padding(horizontal = 12.dp, vertical = 9.dp),
+                        Modifier.fillMaxWidth().clickable { Ncm.playSong(ctx, id) }.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Glyph(G.Play, accent, Modifier.size(13.dp))
+                        Thumb(s, 30)
                         Text(s.title, fontSize = 13.5.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp).weight(1f, fill = false))
                         if (s.artist.isNotEmpty()) Text(" · ${s.artist}", fontSize = 12.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (m.songs.size >= 3) {
+                    val q by Buddy.queue.collectAsState()
+                    val on = q == m.songs
+                    Row(
+                        Modifier.fillMaxWidth().clickable { if (on) Buddy.stopQueue() else Buddy.startQueue(ctx, m.songs) }.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Glyph(if (on) G.Pause else G.Play, accent, Modifier.size(13.dp))
+                        Text(if (on) "正在按顺序播放 · 点一下停止" else "按顺序播放这 ${m.songs.size} 首", fontSize = 13.sp, color = accent, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 10.dp))
                     }
                 }
             }
@@ -237,6 +256,62 @@ private fun Typing() {
         for (i in 0 until 3) {
             val a by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(500, delayMillis = i * 160), RepeatMode.Reverse), label = "d$i")
             Box(Modifier.size(6.dp).clip(CircleShape).background(Wg.ink2.copy(alpha = a)))
+        }
+    }
+}
+
+@Composable
+fun Thumb(s: Song, sizeDp: Int) {
+    val img = rememberArt(s.pic, if (sizeDp > 48) 300 else 120)
+    Box(
+        Modifier.size(sizeDp.dp).clip(RoundedCornerShape((sizeDp / 4).dp))
+            .background(Brush.linearGradient(listOf(feelColor(s.v ?: 0.5f, s.e ?: 0.5f).copy(alpha = 0.55f), Color(0xFFFFE2A8)))),
+    ) {
+        if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+    }
+}
+
+// 此刻的心情：点一个，微光按情绪从曲库里排一段路；低落/疲惫/烦躁会先接住、再慢慢带出来
+@Composable
+private fun FeelCard(onFeel: (Feel) -> Unit) {
+    Column(Modifier.fillMaxWidth().glass(22.dp, 4.dp).padding(16.dp)) {
+        Text("此刻的心情", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+        Text("选一个，微光按情绪从你的曲库里排一段歌", fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 3.dp, bottom = 12.dp))
+        Feels.chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { f ->
+                    val c = feelColor(f.v, f.e)
+                    Row(
+                        Modifier.weight(1f).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.7f))
+                            .clickable { onFeel(f) }.padding(vertical = 9.dp),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(7.dp).shadow(4.dp, CircleShape, spotColor = c).clip(CircleShape).background(c))
+                        Text(f.name, fontSize = 13.sp, color = Wg.ink, modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 这个点你常听：从听歌流水里学出来的，不用 AI
+@Composable
+private fun Habit(accent: Color) {
+    val ctx = LocalContext.current
+    val lib by Library.state.collectAsState()
+    val songs = remember(lib.plays.size, lib.songs.size) { Buddy.habit(6) }
+    if (songs.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Text("这个点你常听", fontSize = 13.sp, color = Wg.ink2, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            songs.forEach { s ->
+                Column(Modifier.size(width = 92.dp, height = 128.dp).clip(RoundedCornerShape(16.dp)).clickable { Ncm.playSong(ctx, s.id) }) {
+                    Thumb(s, 92)
+                    Text(s.title, fontSize = 12.5.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
+                    Text(s.artist, fontSize = 11.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
+                }
+            }
         }
     }
 }
