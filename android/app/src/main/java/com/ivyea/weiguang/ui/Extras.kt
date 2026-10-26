@@ -262,9 +262,8 @@ fun ServersSection() {
                     testing = false
                     if (e == null) {
                         list = Sources.servers; adding = false; url = ""; user = ""; pass = ""
-                        msg = "已连上，正在读歌单"
-                        Library.sync(ctx)
-                        msg = ""
+                        msg = "已连上，歌单在后台同步，去曲库看"
+                        Library.syncAsync(ctx)
                     } else msg = e
                 }
             }

@@ -83,7 +83,7 @@ fun App() {
     LaunchedEffect(listenerOn) {
         if (!listenerOn) return@LaunchedEffect
         NowPlaying.attach(ctx)
-        if ((Players.installed(ctx).isNotEmpty() || com.ivyea.weiguang.core.Sources.servers.isNotEmpty()) && System.currentTimeMillis() - Library.state.value.syncedAt > AUTO_SYNC_MS) Library.sync(ctx)
+        if ((Players.installed(ctx).isNotEmpty() || com.ivyea.weiguang.core.Sources.servers.isNotEmpty()) && System.currentTimeMillis() - Library.state.value.syncedAt > AUTO_SYNC_MS) Library.syncAsync(ctx)
         else Library.fillCovers()
     }
 

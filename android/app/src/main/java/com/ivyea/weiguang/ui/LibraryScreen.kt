@@ -1,5 +1,7 @@
 package com.ivyea.weiguang.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -96,13 +98,12 @@ private fun tileOf(name: String) = tiles[(name.hashCode() and 0x7fffffff) % tile
 @Composable
 fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     var q by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openPl by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(enabled = openPl != null || q.isNotEmpty()) { if (q.isNotEmpty()) q = "" else openPl = null }
 
-    val sync: () -> Unit = { scope.launch { Library.sync(ctx) } }
+    val sync: () -> Unit = { Library.syncAsync(ctx) }
     val play: (Song) -> Unit = { s -> Players.play(ctx, s) }
     val hits = remember(q, lib.songs) {
         val k = q.trim()
@@ -284,11 +285,12 @@ internal fun SearchBox(q: String, hint: String = "搜歌名或歌手", onChange:
 // 文字分栏 + 选中项下面一道短线，比整条胶囊轻
 @Composable
 private fun Tabs(tab: Int, accent: Color, onTab: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 14.dp)) {
-        listOf("歌单", "听过", "星图", "日记", "电台").forEachIndexed { i, label ->
+    // 显示顺序和编号分开（编号是存下来的，电台后加但放第二个）
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 22.dp, bottom = 14.dp)) {
+        listOf(0 to "歌单", 4 to "电台", 1 to "听过", 2 to "星图", 3 to "日记").forEach { (i, label) ->
             val sel = i == tab
             Column(
-                Modifier.padding(end = 26.dp).clickable { onTab(i) },
+                Modifier.padding(end = 24.dp).clickable { onTab(i) },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(label, fontSize = if (sel) 16.sp else 15.sp, color = if (sel) Wg.ink else Wg.ink3, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)

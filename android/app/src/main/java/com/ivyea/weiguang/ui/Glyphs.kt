@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 
-enum class G { Play, Pause, Next, Prev, Heart }
+enum class G { Play, Pause, Next, Prev, Heart, HeartFill }
 
 // 自绘的几个控制图标（Material 核心图标里没有暂停/切歌）
 @Composable
@@ -36,14 +36,14 @@ fun Glyph(kind: G, color: Color, modifier: Modifier) {
                 }, color)
                 drawRoundRect(color, Offset(if (flip) w * 0.18f else w * 0.72f, h * 0.2f), Size(w * 0.1f, h * 0.6f), CornerRadius(w * 0.04f))
             }
-            G.Heart -> drawPath(Path().apply {
+            G.Heart, G.HeartFill -> drawPath(Path().apply {
                 moveTo(w * 0.5f, h * 0.84f)
                 cubicTo(w * 0.1f, h * 0.58f, w * 0.06f, h * 0.3f, w * 0.28f, h * 0.2f)
                 cubicTo(w * 0.4f, h * 0.15f, w * 0.48f, h * 0.24f, w * 0.5f, h * 0.32f)
                 cubicTo(w * 0.52f, h * 0.24f, w * 0.6f, h * 0.15f, w * 0.72f, h * 0.2f)
                 cubicTo(w * 0.94f, h * 0.3f, w * 0.9f, h * 0.58f, w * 0.5f, h * 0.84f)
                 close()
-            }, color, style = Stroke(w * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }, color, style = if (kind == G.HeartFill) androidx.compose.ui.graphics.drawscope.Fill else Stroke(w * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
 }

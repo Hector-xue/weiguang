@@ -237,9 +237,13 @@ object NowPlaying {
     fun prev() { ctrl?.transportControls?.skipToPrevious() }
     fun seekTo(ms: Long) { ctrl?.transportControls?.seekTo(ms) }
 
+    // 有 App 自己的红心就按它的；没有（微光自己放的、别家没给按钮）就记进微光的「我喜欢」
     fun like() {
         val c = ctrl ?: return
-        val a = likeAction(c) ?: return
-        c.transportControls.sendCustomAction(a.action, Bundle())
+        val a = likeAction(c)
+        if (a != null) { c.transportControls.sendCustomAction(a.action, Bundle()); return }
+        val id = _now.value?.songId
+        if (id == null) { app?.let { android.widget.Toast.makeText(it, "电台不能加红心", android.widget.Toast.LENGTH_SHORT).show() }; return }
+        Library.toggleFav(id)
     }
 }

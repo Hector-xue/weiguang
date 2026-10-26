@@ -1,5 +1,6 @@
 package com.ivyea.weiguang.ui
 
+import com.ivyea.weiguang.core.Library
 import android.Manifest
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -314,7 +315,11 @@ private fun Controls(now: Now, accent: Color, onOpen: () -> Unit) {
         RoundBtn(48, { NowPlaying.like() }) {
             val icon = remember(now.likeIcon) { now.likeIcon?.asImageBitmap() }
             if (icon != null) Image(icon, contentDescription = "喜欢", colorFilter = ColorFilter.tint(accent), modifier = Modifier.size(26.dp))
-            else Glyph(G.Heart, if (now.hasLike) accent else Wg.ink3, Modifier.size(24.dp))
+            else {
+                Library.state.collectAsState().value
+                val fav = Library.isFav(now.songId)
+                Glyph(if (fav) G.HeartFill else G.Heart, if (fav || now.hasLike) accent else Wg.ink3, Modifier.size(24.dp))
+            }
         }
         RoundBtn(52, { NowPlaying.prev() }) { Glyph(G.Prev, Wg.ink, Modifier.size(24.dp)) }
         Box(

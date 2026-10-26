@@ -8,6 +8,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.service.media.MediaBrowserService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -250,6 +254,10 @@ object Library {
     // ---------- 同步歌单 ----------
 
     // 每个装了的音乐 App 都试一遍；连不上的那家保留上次的歌单，明细写进同步记录
+    // 同步挂在曲库自己的作用域上：切页面、离开设置都不会把它打断
+    private val bg = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    fun syncAsync(ctx: Context) { bg.launch { sync(ctx.applicationContext) } }
+
     suspend fun sync(ctx: Context) {
         if (_state.value.syncing) return
         val apps = Players.installed(ctx)
@@ -303,12 +311,13 @@ object Library {
                     playlists += _state.value.playlists.filter { it.id.startsWith(prefix) }
                 }
             }
-            playlists += _state.value.playlists.filter { it.id == GEN }
+            playlists += _state.value.playlists.filter { it.id == GEN || it.id == FAV }
         } finally {
             val old = _state.value
             set {
                 it.copy(
-                    songs = songs, playlists = playlists, syncing = false,
+                    // 一家都没成功（或被打断）就保留原来的歌单，别清空
+                    songs = songs, playlists = if (ok == 0) old.playlists else playlists, syncing = false,
                     syncedAt = if (ok > 0) System.currentTimeMillis() else old.syncedAt,
                     // 有一家成功就不打扰；全失败才把原因摆出来
                     syncMsg = if (ok == 0) errs.joinToString("\n") else "",
@@ -377,6 +386,21 @@ object Library {
 
     // AI 作曲的歌放进「微光作曲」歌单
     const val GEN = "${Local.PKG}|gen"
+    const val FAV = "${Local.PKG}|fav"
+
+    // 微光自己的「我喜欢」：App 没有红心按钮（或是微光自己在放）时，红心记在这里
+    fun isFav(id: Long?) = id != null && _state.value.playlists.firstOrNull { it.id == FAV }?.songIds?.contains(id) == true
+
+    fun toggleFav(id: Long): Boolean {
+        val s = _state.value
+        val old = s.playlists.firstOrNull { it.id == FAV }?.songIds ?: emptyList()
+        val on = id !in old
+        val pl = Playlist(FAV, "我喜欢", if (on) listOf(id) + old else old - id)
+        val rest = s.playlists.filter { it.id != FAV }
+        _state.value = s.copy(playlists = if (pl.songIds.isEmpty()) rest else listOf(pl) + rest)
+        save()
+        return on
+    }
 
     // 微光自己的音源（免费曲库）放之前先记进曲库，播放器报上来的 wg:<id> 才对得上
     fun addOwn(list: List<Song>) {
