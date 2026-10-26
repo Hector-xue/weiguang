@@ -1,0 +1,38 @@
+name: 界面截图
+
+# 用假数据渲染每个页面出 PNG（Robolectric + Roborazzi），改界面时对着真实渲染调，不用真机来回截图
+on:
+  push:
+    branches: ['design', 'design/**']
+    paths: ['android/**', '.github/workflows/shots.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: shots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: 截图
+        run: gradle :app:testDebugUnitTest -Proborazzi.test.record=true --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots
+          path: |
+            android/app/build/shots/*.png
+            android/app/build/reports/tests/
+          retention-days: 7

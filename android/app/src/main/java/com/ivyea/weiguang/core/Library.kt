@@ -65,6 +65,9 @@ object Library {
     private val main = Handler(Looper.getMainLooper())
     private var lastPlayed: Long? = null
 
+    // 截图测试用：直接摆一份曲库
+    internal fun preview(st: LibState) { _state.value = st; index(st.songs) }
+
     fun init(ctx: Context) {
         if (file != null) return
         file = File(ctx.filesDir, "library.json")

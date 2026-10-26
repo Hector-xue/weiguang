@@ -50,7 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.core.Buddy
+import com.ivyea.weiguang.core.LibState
 import com.ivyea.weiguang.core.Library
+import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
 import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Weather
@@ -99,22 +101,27 @@ fun App() {
 
     BackHandler(enabled = tab != 0) { tab = 0 }
 
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(a, b, c), start = Offset.Zero, end = Offset.Infinite))) {
+    Shell(tab, listenerOn, now, lib, Mood(a, b, c, accent), time) { tab = it }
+}
+
+// 整个界面（背景 + 当前页 + 底栏）；截图测试直接渲染它
+@Composable
+internal fun Shell(tab: Int, listenerOn: Boolean, now: Now?, lib: LibState, m: Mood, time: State<Float>, onTab: (Int) -> Unit) {
+    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(m.a, m.b, m.c), start = Offset.Zero, end = Offset.Infinite))) {
         Dust(Modifier.fillMaxSize(), time)
         if (!listenerOn) {
             Onboarding(time)
             return@Box
         }
-        val m = Mood(a, b, c, accent)
         Crossfade(targetState = tab, animationSpec = tween(260), label = "tab") { t ->
             when (t) {
-                0 -> MomentScreen(now, accent, time, onOpenPlayer = { tab = 1 }, onOpenSettings = { tab = 3 })
+                0 -> MomentScreen(now, m.accent, time, onOpenPlayer = { onTab(1) }, onOpenSettings = { onTab(3) })
                 1 -> NowScreen(now, m, time)
-                2 -> LibraryScreen(lib, now, accent, time)
+                2 -> LibraryScreen(lib, now, m.accent, time)
                 else -> SettingsPage()
             }
         }
-        Dock(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
+        Dock(tab, Modifier.align(Alignment.BottomCenter), onTab)
     }
 }
 
