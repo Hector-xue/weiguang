@@ -351,17 +351,17 @@ fun Thumb(s: Song, sizeDp: Int) {
 private fun FeelCard(onFeel: (Feel) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         Eyebrow("此刻的心情")
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(8.dp))
         Feels.chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
                 row.forEach { f ->
                     val c = feelColor(f.v, f.e)
                     Column(
-                        Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable { onFeel(f) }.padding(vertical = 6.dp),
+                        Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable { onFeel(f) }.padding(vertical = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box(
-                            Modifier.size(46.dp).background(Brush.radialGradient(listOf(c.copy(alpha = 0.55f), c.copy(alpha = 0.18f), Color.Transparent))),
+                            Modifier.size(40.dp).background(Brush.radialGradient(listOf(c.copy(alpha = 0.75f), c.copy(alpha = 0.22f), Color.Transparent))),
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
@@ -369,7 +369,7 @@ private fun FeelCard(onFeel: (Feel) -> Unit) {
                                     .background(Brush.radialGradient(listOf(Color.White, c), radius = 30f)),
                             )
                         }
-                        Text(f.name, fontSize = 13.sp, color = Wg.ink, modifier = Modifier.padding(top = 4.dp))
+                        Text(f.name, fontSize = 13.sp, color = Wg.ink2, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
             }

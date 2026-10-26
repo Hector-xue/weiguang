@@ -165,18 +165,18 @@ private fun Onboarding(time: State<Float>) {
         Spacer(Modifier.height(32.dp))
         Step(
             "1", "读取正在播放",
-            "打开「通知使用权」，微光才知道音乐 App 在放什么。只读播放信息，不看你的通知内容。",
+            "开「通知使用权」，微光才知道在放什么。只读播放信息。",
             done = false, action = "去开启",
         ) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         Spacer(Modifier.height(12.dp))
         Step(
-            "2", if (apps.isNotEmpty()) "音乐 App 已就绪" else "还没装音乐 App",
-            if (apps.isNotEmpty()) apps.map { it.short }.distinct().joinToString("、").let { "$it。网易云能读歌单、按歌点播，其他 App 读播放和控制" }
-            else "网易云、QQ音乐、酷狗、酷我、汽水都行；网易云配合得最好",
+            "2", if (apps.isNotEmpty()) "音乐 App 已就绪" else "不装音乐 App 也行",
+            if (apps.isNotEmpty()) apps.map { it.short }.distinct().joinToString("、").let { "$it，都能陪着听" }
+            else "微光自带免费曲库和电台；装了网易云能同步你的歌单",
             done = apps.isNotEmpty(), action = if (apps.isNotEmpty()) "" else "去下载",
         ) { Players.openStore(ctx) }
         Text(
-            "粒子频谱和悬浮光球在设置里，随时可以开。",
+            "粒子频谱、悬浮光球在设置里",
             fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 20.dp, bottom = 32.dp),
         )
     }

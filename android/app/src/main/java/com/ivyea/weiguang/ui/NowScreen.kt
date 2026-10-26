@@ -217,7 +217,7 @@ private fun TopBar(now: Now?) {
     Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp).height(36.dp), contentAlignment = Alignment.Center) {
         val status = when {
             now == null -> "等待音乐 App"
-            now.playing -> "正在 ${Players.nameOf(now.pkg)} 播放"
+            now.playing -> "${Players.nameOf(now.pkg)} · 在听"
             else -> "${Players.nameOf(now.pkg)} · 已暂停"
         }
         Row(Modifier.glass(999.dp, 2.dp).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
