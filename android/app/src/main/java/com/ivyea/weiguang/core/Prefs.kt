@@ -70,6 +70,20 @@ object Prefs {
         get() = sp?.getBoolean("zhOnly", false) ?: false
         set(v) { sp?.edit()?.putBoolean("zhOnly", v)?.apply() }
 
+    // 每晚一首：默认关，首页问过一次或在设置里开；时间按分钟存（默认 22:00）；nightlyLast=上次发的那天，一天只发一条
+    var nightly: Boolean
+        get() = sp?.getBoolean("nightly", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("nightly", v)?.apply() }
+    var nightlyAt: Int
+        get() = sp?.getInt("nightlyAt", 22 * 60) ?: (22 * 60)
+        set(v) { sp?.edit()?.putInt("nightlyAt", v)?.apply() }
+    var nightlyLast: Int
+        get() = sp?.getInt("nightlyLast", 0) ?: 0
+        set(v) { sp?.edit()?.putInt("nightlyLast", v)?.apply() }
+    var nightlyAsked: Boolean
+        get() = sp?.getBoolean("nightlyAsked", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("nightlyAsked", v)?.apply() }
+
     var autoplay: Boolean
         get() = sp?.getBoolean("autoplay", true) ?: true
         set(v) { sp?.edit()?.putBoolean("autoplay", v)?.apply() }

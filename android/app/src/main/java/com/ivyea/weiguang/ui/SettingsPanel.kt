@@ -75,6 +75,9 @@ fun SettingsPage() {
     val listenerOn = remember(tick) { listenerEnabled(ctx) }
     var weather by remember { mutableStateOf(Prefs.weather) }
     var autoplay by remember { mutableStateOf(Prefs.autoplay) }
+    var nightly by remember { mutableStateOf(Prefs.nightly) }
+    var nightlyAt by remember { mutableStateOf(Prefs.nightlyAt) }
+    val canNotify = remember(tick) { com.ivyea.weiguang.core.Nightly.granted(ctx) }
     val located = remember(tick, weather) { Weather.granted(ctx) }
     val lib by Library.state.collectAsState()
     var showLog by remember { mutableStateOf(false) }
@@ -83,6 +86,10 @@ fun SettingsPage() {
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) { Prefs.spectrum = true; spectrum = true; Spectrum.start(ctx) }
     }
+    val setNightly: (Boolean) -> Unit = { on ->
+        Prefs.nightly = on; Prefs.nightlyAsked = true; nightly = on; com.ivyea.weiguang.core.Nightly.schedule(ctx)
+    }
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) setNightly(true) }
     val askLoc = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) { Prefs.weather = true; weather = true }
     }
@@ -131,6 +138,23 @@ fun SettingsPage() {
             Line()
             SwitchRow("打开就放", "接着放上次的，放不起来就放电台", autoplay) { on ->
                 Prefs.autoplay = on; autoplay = on
+            }
+            Line()
+            SwitchRow(
+                "每晚一首",
+                if (canNotify) "今天的歌；周日本周回顾，月初月度回顾" else "要通知权限，每晚一条",
+                nightly && canNotify,
+            ) { on ->
+                if (!on) setNightly(false)
+                else if (canNotify) setNightly(true)
+                else askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (nightly && canNotify) {
+                InfoRow("提醒时间", com.ivyea.weiguang.core.Nightly.label(nightlyAt), true) {
+                    android.app.TimePickerDialog(ctx, { _, h, m ->
+                        Prefs.nightlyAt = h * 60 + m; nightlyAt = h * 60 + m; com.ivyea.weiguang.core.Nightly.schedule(ctx)
+                    }, nightlyAt / 60, nightlyAt % 60, true).show()
+                }
             }
         }
 

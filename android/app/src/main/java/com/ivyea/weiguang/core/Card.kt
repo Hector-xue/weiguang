@@ -123,7 +123,7 @@ object Card {
         return bmp
     }
 
-    // 本周回顾卡：听歌人格 + 一句话 + 数字 + 最常听的三首
+    // 回顾卡（本周 / 本月）：听歌人格 + 一句话 + 数字 + 最常听的三首
     fun week(r: Recap, cover0: Bitmap?): Bitmap {
         val art = sw(cover0)
         val bmp = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
@@ -131,13 +131,15 @@ object Card {
         backdrop(c, art)
         val m = 96f
         val df = SimpleDateFormat("M.d", Locale.CHINA)
-        c.drawText("本周听歌  ${df.format(r.from)} — ${df.format(r.to)}", m, 190f, text(34f, INK2))
+        c.drawText("${r.title}  ${df.format(r.from)} — ${df.format(r.to)}", m, 190f, text(34f, INK2))
         c.drawText("你是", m, 300f, text(40f, INK2, serif()))
         c.drawText(r.persona, m - 6f, 450f, text(150f, INK, serif(true)))
         var y = draw(c, layout(r.line, text(40f, INK2, serif()), (W - m * 2).toInt(), 1.4f, 3), m, 500f) + 70f
 
         // 三个数
-        val nums = listOf("${r.plays}" to "次播放", "${r.songs}" to "首歌", (r.latest ?: "${r.artists}") to (if (r.latest != null) "最晚还在听" else "位歌手"))
+        // 第二个数：一周看几首歌，一个月看有几天在听
+        val second = if (r.to - r.from > 8L * 24 * 3600 * 1000) "${r.days}" to "天在听" else "${r.songs}" to "首歌"
+        val nums = listOf("${r.plays}" to "次播放", second, (r.latest ?: "${r.artists}") to (if (r.latest != null) "最晚还在听" else "位歌手"))
         val colW = (W - m * 2) / 3f
         nums.forEachIndexed { i, (v, k) ->
             c.drawText(v, m + colW * i, y + 80f, text(76f, INK, serif(true)))

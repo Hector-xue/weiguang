@@ -78,6 +78,7 @@ import com.ivyea.weiguang.core.Library
 import com.ivyea.weiguang.core.Msg
 import com.ivyea.weiguang.core.Meta
 import com.ivyea.weiguang.core.Players
+import com.ivyea.weiguang.core.Prefs
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
 import com.ivyea.weiguang.core.Spectrum
@@ -94,6 +95,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     val open by Buddy.open.collectAsState()
     val libPlays = Library.state.collectAsState().value.plays.size
     val recap = remember(libPlays / 5) { com.ivyea.weiguang.core.Recaps.week() }
+    var nightly by remember { mutableStateOf(Prefs.nightly) }
     // 上次的对话：这次还没聊就先不摊开
     val msgs = if (open) all else emptyList()
     val busy by Buddy.busy.collectAsState()
@@ -107,6 +109,11 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     LaunchedEffect(msgs.size, busy) { if (msgs.isNotEmpty()) list.animateScrollToItem(msgs.size + (if (busy) 1 else 0)) }
 
     var sheet by rememberSaveable { mutableStateOf("") }
+    val nav by Nav.target.collectAsState()
+    LaunchedEffect(nav) {
+        when (nav) { "recap_week" -> sheet = "recap"; "recap_month" -> sheet = "recap_month"; else -> return@LaunchedEffect }
+        Nav.done()
+    }
     // 聊着的时候按返回：收起对话回到首页（记录还在）
     androidx.activity.compose.BackHandler(enabled = open && all.isNotEmpty() && sheet.isEmpty()) { Buddy.collapse() }
     Box(Modifier.fillMaxSize()) {
@@ -185,6 +192,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
                 if (all.isNotEmpty()) item { Resume(all.last(), accent) { Buddy.reopen() } }
                 item { FeelCard { f -> scope.launch { Buddy.feel(f) } } }
                 if (recap.plays >= 5) item { RecapRow(recap, accent) { sheet = "recap" } }
+                if (recap.plays >= 5 && !nightly && !Prefs.nightlyAsked) item { NightlyOffer(accent) { nightly = it } }
                 item { MakeRow(onHum = { sheet = "hum" }, onGen = { sheet = "gen" }) }
                 item { Habit(accent) }
             }
@@ -242,7 +250,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     }
     when (sheet) {
         "hum" -> HumSheet(time, accent, { sheet = "" }, onOpenSettings)
-        "recap" -> RecapSheet(recap, accent) { sheet = "" }
+        "recap", "recap_month" -> RecapSheet(recap, accent, month0 = sheet == "recap_month") { sheet = "" }
         "gen" -> GenSheet(time, accent, Buddy.radio.value?.say ?: msgs.lastOrNull { it.me }?.text ?: "", { sheet = "" }, onOpenSettings)
     }
     }

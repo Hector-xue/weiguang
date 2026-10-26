@@ -34,5 +34,6 @@ jobs:
           name: shots
           path: |
             android/app/build/shots/*.png
+            android/app/build/shots/*.txt
             android/app/build/reports/tests/
           retention-days: 7

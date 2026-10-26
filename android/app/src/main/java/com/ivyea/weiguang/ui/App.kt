@@ -99,6 +99,10 @@ fun App() {
     LaunchedEffect(thought) { NowWidget.refresh(ctx.applicationContext) }
     LaunchedEffect(Unit) { Buddy.runQueue(ctx.applicationContext) }
 
+    // 从通知点进来：都先回「此刻」，回顾浮层由此刻页接着打开
+    val nav by Nav.target.collectAsState()
+    LaunchedEffect(nav) { if (nav != null) { tab = 0; if (nav == "moment") Nav.done() } }
+
     BackHandler(enabled = tab != 0) { tab = 0 }
 
     Shell(tab, listenerOn, now, lib, Mood(a, b, c, accent), time) { tab = it }

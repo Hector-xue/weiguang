@@ -1,5 +1,6 @@
 package com.ivyea.weiguang
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -29,10 +30,32 @@ class MainActivity : ComponentActivity() {
         if (com.ivyea.weiguang.core.Sources.servers.isEmpty()) com.ivyea.weiguang.core.Sources.load()
         com.ivyea.weiguang.core.Art.init(this)
         setContent { WeiguangTheme { App() } }
+        com.ivyea.weiguang.core.Nightly.schedule(this)
         if (savedInstanceState == null) {
+            handle(intent)
             NowPlaying.attach(this)
-            if (com.ivyea.weiguang.ui.listenerEnabled(this)) com.ivyea.weiguang.core.Players.autoStart(this)
+            // 从通知点「放这首」进来就放那首，不再自动接着放
+            if (com.ivyea.weiguang.ui.listenerEnabled(this) && !opened) com.ivyea.weiguang.core.Players.autoStart(this)
         }
+    }
+
+    private var opened = false
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    // 通知点进来：wg_open=recap_week / recap_month / moment / play:<歌曲ID>
+    private fun handle(i: Intent?) {
+        val what = i?.getStringExtra(com.ivyea.weiguang.core.Nightly.EXTRA) ?: return
+        i.removeExtra(com.ivyea.weiguang.core.Nightly.EXTRA)
+        getSystemService(android.app.NotificationManager::class.java)?.cancel(com.ivyea.weiguang.core.Nightly.ID)
+        if (what.startsWith("play:")) {
+            val s = what.removePrefix("play:").toLongOrNull()?.let { Library.state.value.songs[it] } ?: return
+            opened = true
+            com.ivyea.weiguang.core.Players.play(this, s)
+        } else com.ivyea.weiguang.ui.Nav.go(what)
     }
 
     override fun onResume() {
