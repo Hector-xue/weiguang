@@ -102,8 +102,11 @@ object Cloud {
             get("https://music.163.com/api/cloudsearch/pc?type=1&limit=10&offset=0&s=" + java.net.URLEncoder.encode(q, "UTF-8"))
         } ?: return null
         return try {
-            val a = JSONObject(raw).optJSONObject("result")?.optJSONArray("songs") ?: return Hit(0, "")
-            val wantAr = artist.split("/", "、", "&", ",").map { Library.norm(it) }.filter { it.isNotEmpty() }.toSet()
+            val o = JSONObject(raw)
+            // 被限流时 code 不是 200，当网络问题处理，别把这首记成「对不上」
+            if (o.optInt("code", 200) != 200) return null
+            val a = o.optJSONObject("result")?.optJSONArray("songs") ?: return Hit(0, "")
+            val wantAr = artist.split("/", "、", "&", ",").flatMap { aliases(it) }.toSet()
             var best: Hit? = null
             var bestScore = 0
             for (i in 0 until a.length()) {
@@ -112,7 +115,7 @@ object Cloud {
                 val titleOk = name == t || (name.startsWith(t) && name.length - t.length <= 6)
                 if (!titleOk) continue
                 val ars = s.optJSONArray("ar")
-                val arOk = ars != null && (0 until ars.length()).any { j -> Library.norm(ars.getJSONObject(j).optString("name")) in wantAr }
+                val arOk = ars != null && (0 until ars.length()).any { j -> aliases(ars.getJSONObject(j).optString("name")).any { it in wantAr } }
                 val dt = s.optLong("dt")
                 val durOk = durMs > 0 && dt > 0 && kotlin.math.abs(dt - durMs) < 4000
                 if (!arOk && !durOk) continue
@@ -125,5 +128,12 @@ object Cloud {
             }
             best ?: Hit(0, "")
         } catch (_: Throwable) { null }
+    }
+
+    // 歌手名的几种写法：「冯沁苑(买辣椒也用券)」里外都算。只去空白不去标点，免得「周杰伦.」这种冒名的也对上
+    private fun aliases(name: String): List<String> {
+        val n = name.lowercase().filterNot { it.isWhitespace() }
+        if (n.isEmpty()) return emptyList()
+        return (listOf(n) + n.split('(', ')', '（', '）')).filter { it.isNotEmpty() }.distinct()
     }
 }
