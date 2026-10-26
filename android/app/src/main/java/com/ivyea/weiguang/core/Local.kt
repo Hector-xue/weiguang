@@ -32,7 +32,7 @@ object Local {
     fun item(s: Song): MediaItem? {
         val uri = s.loc?.let { Sources.uriOf(it) } ?: return null
         return MediaItem.Builder()
-            .setMediaId("wg:${s.id}")
+            .setMediaId(if (s.loc?.startsWith("url:") == true) "radio:${s.id}" else "wg:${s.id}")
             .setUri(uri)
             .setMediaMetadata(
                 MediaMetadata.Builder().setTitle(s.title).setArtist(s.artist)

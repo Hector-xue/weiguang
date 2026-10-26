@@ -60,6 +60,15 @@ object Prefs {
         set(v) { sp?.edit()?.putInt("persona", v)?.apply() }
 
     // 参考天气（要大致位置权限）；默认关
+    // 打开微光就开始放（没在放的话）：接着放正在用的 App，没有 App 就放微光自己的电台
+    var autoplay: Boolean
+        get() = sp?.getBoolean("autoplay", true) ?: true
+        set(v) { sp?.edit()?.putBoolean("autoplay", v)?.apply() }
+
+    // 这个 App 把歌词塞进歌名（见 Meta）
+    fun lyricMode(pkg: String) = sp?.getBoolean("lyric:$pkg", false) ?: false
+    fun setLyricMode(pkg: String) { if (!lyricMode(pkg)) sp?.edit()?.putBoolean("lyric:$pkg", true)?.apply() }
+
     var weather: Boolean
         get() = sp?.getBoolean("weather", false) ?: false
         set(v) { sp?.edit()?.putBoolean("weather", v)?.apply() }

@@ -58,8 +58,8 @@ object Players {
 
     fun nameOf(pkg: String?): String = known[pkg]?.short ?: "音乐 App"
 
-    // 点歌能选的：装了的 App，配了自建曲库时加上微光自己
-    fun choices(ctx: Context): List<Player> = installed(ctx) + if (Sources.servers.isNotEmpty()) listOf(self) else emptyList()
+    // 点歌能选的：装了的 App + 微光自己（自建曲库、电台，不开别的 App）
+    fun choices(ctx: Context): List<Player> = installed(ctx) + self
 
     // 点歌用哪个 App：设置里指定的 > 正在放的 > 上次放过的 > 网易云 > 装了的第一个
     fun target(ctx: Context): String? {
@@ -90,7 +90,7 @@ object Players {
     // 自建曲库里有的歌（或 AI 作曲的）优先微光自己放：不切 App、不受版权和会员限制
     fun play(ctx: Context, s: Song) {
         val app = ctx.applicationContext
-        val pkg = target(app) ?: run { toast(app, "还没装音乐 App"); return }
+        val pkg = target(app) ?: Local.PKG
         if (s.loc != null && (Prefs.player.isEmpty() || pkg == Local.PKG || s.src == Local.PKG)) {
             if (Local.play(app, listOf(s))) return
         }
@@ -98,8 +98,13 @@ object Players {
             if (pkg == Local.PKG) {
                 val it = Sources.find(s.title, s.artist)
                 if (it != null && Local.play(app, listOf(s.copy(loc = it.loc, pic = s.pic ?: it.cover)))) return@launch
-                val other = installed(app).firstOrNull()?.pkg
-                if (other == null) { toast(app, "自建曲库里没有这首"); return@launch }
+                // 选了「微光」就不开别的 App：曲库里没有就放微光电台
+                val other = installed(app).firstOrNull()?.pkg?.takeIf { Prefs.player != Local.PKG }
+                if (other == null) {
+                    toast(app, if (Sources.servers.isEmpty()) "微光自己没有这首，先放微光电台" else "自建曲库里没有这首，先放微光电台")
+                    Radio.play(app)?.let { toast(app, it) }
+                    return@launch
+                }
                 toast(app, "自建曲库里没有这首，换${nameOf(other)}放")
                 playIn(app, other, s)
             } else playIn(app, pkg, s)
@@ -135,6 +140,19 @@ object Players {
         openApp(ctx, pkg)
         toast(ctx, "$name 没接住点歌，已打开它，歌名复制好了，粘贴到搜索就行")
     }
+
+    // 自检用：对一个 App 每种点歌方式单独试一遍（不记、不兜底），中间停一会儿
+    suspend fun probe(ctx: Context, pkg: String, s: Song): List<Pair<String, Boolean>> =
+        methods.keys.filter { it != "lx" || pkg == LX }.map { m ->
+            val ok = when (m) {
+                "lx" -> byLx(ctx, s)
+                "session" -> bySession(pkg, s)
+                "mid" -> byMediaId(ctx, pkg, s)
+                else -> byIntent(ctx, pkg, s)
+            }
+            delay(800)
+            m to ok
+        }
 
     fun query(s: Song) = (s.title + " " + s.artist.split("/", "、", "&", ",").first()).trim()
 
@@ -200,6 +218,7 @@ object Players {
             if (n.pkg != pkg) continue
             val got = Library.norm(n.title)
             if (got.isNotEmpty() && (got == want || got.startsWith(want) || want.startsWith(got))) return true
+            if (want.isNotEmpty() && Library.norm(n.artist).contains(want)) return true
         }
         return false
     }
@@ -227,6 +246,39 @@ object Players {
     }
 
     private fun toast(ctx: Context, msg: String) = main.post { Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show() }
+
+    // ---------- 打开就放 ----------
+
+    // 没在放才动：选了微光→电台；否则接着放正在用的 App（会话还在就直接 play），
+    // 会话不在就发系统「播放」键（系统交给最近放过歌的 App，不打开它的界面），都没响应再放微光电台
+    fun autoStart(ctx: Context) {
+        if (!Prefs.autoplay) return
+        val app = ctx.applicationContext
+        scope.launch {
+            delay(1200)
+            if (NowPlaying.now.value?.playing == true) return@launch
+            val pkg = target(app)
+            if (pkg != Local.PKG && pkg != null) {
+                val c = NowPlaying.controllerOf(pkg)
+                try {
+                    if (c != null) c.transportControls.play() else mediaKey(app)
+                } catch (_: Throwable) {}
+                var waited = 0
+                while (waited < 3000) {
+                    delay(250); waited += 250
+                    if (NowPlaying.now.value?.playing == true) return@launch
+                }
+            }
+            Radio.play(app)?.let { toast(app, it) }
+        }
+    }
+
+    private fun mediaKey(ctx: Context) {
+        val am = ctx.getSystemService(android.media.AudioManager::class.java)
+        val t = android.os.SystemClock.uptimeMillis()
+        for (a in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP))
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(t, t, a, android.view.KeyEvent.KEYCODE_MEDIA_PLAY, 0))
+    }
 
     // ---------- 自动跳回 ----------
 

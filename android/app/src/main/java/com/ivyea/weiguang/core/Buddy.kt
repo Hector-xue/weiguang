@@ -1,5 +1,8 @@
 package com.ivyea.weiguang.core
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import android.content.Context
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -362,8 +365,18 @@ object Buddy {
         play(ctx, ids[0])
     }
 
+    // 曲库里没歌、或选了「微光」又没有自建曲库：放微光电台（网络电台，按心情找风格）
     fun startRadio(ctx: Context, f: Feel, first: List<Long>) {
-        startQueue(ctx, first.ifEmpty { radioBatch(f, emptySet()) })
+        val ids = first.ifEmpty { radioBatch(f, emptySet()) }
+        if (ids.isEmpty() || (Prefs.player == Local.PKG && Sources.servers.isEmpty())) {
+            stopQueue()
+            val app = ctx.applicationContext
+            CoroutineScope(Dispatchers.Main).launch {
+                Radio.play(app, f.name)?.let { android.widget.Toast.makeText(app, it, android.widget.Toast.LENGTH_SHORT).show() }
+            }
+            return
+        }
+        startQueue(ctx, ids)
         if (_queue.value.isNotEmpty()) _radio.value = f
     }
 

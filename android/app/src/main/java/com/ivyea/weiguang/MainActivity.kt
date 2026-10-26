@@ -28,6 +28,10 @@ class MainActivity : ComponentActivity() {
         if (com.ivyea.weiguang.core.Sources.servers.isEmpty()) com.ivyea.weiguang.core.Sources.load()
         com.ivyea.weiguang.core.Art.init(this)
         setContent { WeiguangTheme { App() } }
+        if (savedInstanceState == null) {
+            NowPlaying.attach(this)
+            com.ivyea.weiguang.core.Players.autoStart(this)
+        }
     }
 
     override fun onResume() {

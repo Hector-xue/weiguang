@@ -101,6 +101,7 @@ object Library {
     fun idOf(pkg: String, mediaId: String?, title: String, artist: String): Long? {
         if (pkg == Ncm.PKG) return Ncm.songIdOf(mediaId)
         if (pkg == Local.PKG && mediaId?.startsWith("wg:") == true) mediaId.removePrefix("wg:").toLongOrNull()?.let { return it }
+        if (pkg == Local.PKG && mediaId?.startsWith("radio:") == true) return null
         if (title.isBlank()) return null
         val k = keyOf(title, artist)
         return keys[k] ?: localId(k)
@@ -322,7 +323,7 @@ object Library {
 
     private fun songOf(songs: MutableMap<Long, Song>, item: MediaBrowser.MediaItem, src: String): Long? {
         val title = item.description.title?.toString()?.trim().orEmpty()
-        val artist = item.description.subtitle?.toString()?.trim().orEmpty()
+        val artist = Meta.subtitle(title, item.description.subtitle?.toString()?.trim().orEmpty())
         if (src == Ncm.PKG) {
             val id = Ncm.songIdOf(item.mediaId) ?: return null
             val t = title.ifEmpty { songs[id]?.title ?: "" }
@@ -542,6 +543,15 @@ object Library {
                     val p = a.getJSONArray(i)
                     plays += Play(p.getLong(0), p.getLong(1))
                 }
+            }
+            // 旧版的脏记录：汽水「歌词当歌名」丢掉，歌手栏里的「 - 专辑」去掉
+            val junk = songs.values.filter { Meta.junk(it) }.map { it.id }.toSet()
+            junk.forEach { songs.remove(it) }
+            for ((id, s) in songs.entries.toList()) songs[id] = Meta.fixArtist(s)
+            if (junk.isNotEmpty()) {
+                history.removeAll { it.id in junk }
+                plays.removeAll { it.id in junk }
+                for (i in playlists.indices) playlists[i] = playlists[i].copy(songIds = playlists[i].songIds.filter { it !in junk })
             }
             _state.value = LibState(songs, playlists, history, plays, o.optLong("syncedAt"))
             index(songs)

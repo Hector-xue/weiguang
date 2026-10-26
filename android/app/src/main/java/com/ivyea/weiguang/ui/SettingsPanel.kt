@@ -74,6 +74,7 @@ fun SettingsPage() {
     val canOverlay = remember(tick) { Settings.canDrawOverlays(ctx) }
     val listenerOn = remember(tick) { listenerEnabled(ctx) }
     var weather by remember { mutableStateOf(Prefs.weather) }
+    var autoplay by remember { mutableStateOf(Prefs.autoplay) }
     val located = remember(tick, weather) { Weather.granted(ctx) }
     val lib by Library.state.collectAsState()
     var showLog by remember { mutableStateOf(false) }
@@ -127,10 +128,17 @@ fun SettingsPage() {
                 else if (located) { Prefs.weather = true; weather = true }
                 else askLoc.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
             }
+            Line()
+            SwitchRow("打开就放", "没在放歌时，打开微光接着放上次的 App；放不起来就放微光电台", autoplay) { on ->
+                Prefs.autoplay = on; autoplay = on
+            }
         }
 
         Spacer(Modifier.height(16.dp))
         AppsSection(tick)
+
+        Spacer(Modifier.height(16.dp))
+        CheckSection()
 
         Spacer(Modifier.height(16.dp))
         ServersSection()
@@ -302,13 +310,9 @@ private fun AppsSection(tick: Int) {
     Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp).padding(vertical = 14.dp)) {
         Text("音乐 App", fontSize = 15.sp, color = Wg.ink, modifier = Modifier.padding(horizontal = 18.dp))
         Text(
-            "网易云能读歌单、按歌点播；洛雪有点歌链接，搜到就放；QQ音乐、酷狗、酷我、汽水、MusicFree 能读播放和控制，点歌靠系统通道，接不住就打开它并复制好歌名",
+            "选「微光」就不开别的 App：放自建曲库，没有的歌放微光电台。其他 App 里网易云、洛雪能直接点歌，别家接不住就打开它并复制好歌名",
             fontSize = 12.sp, color = Wg.ink2, lineHeight = 18.sp, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 3.dp),
         )
-        if (apps.isEmpty()) {
-            Text("一个都没装", fontSize = 13.sp, color = Wg.warm, modifier = Modifier.padding(start = 18.dp, top = 12.dp))
-            return@Column
-        }
         Text("点歌用", fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 18.dp, top = 12.dp))
         Row(
             Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp),

@@ -34,7 +34,7 @@ object Sources {
     val kinds = linkedMapOf("subsonic" to "Navidrome / Subsonic", "jellyfin" to "Jellyfin / Emby", "webdav" to "WebDAV")
 
     // 有的服务器挂在 Cloudflare 后面，会拦 okhttp 默认的 UA
-    private val http = OkHttpClient.Builder()
+    val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { it.proceed(it.request().newBuilder().header("User-Agent", "Weiguang").build()) }
         .build()
@@ -281,6 +281,7 @@ object Sources {
 
     // 播放地址：自己的服务器按类型拼，AI 作曲的歌是本机文件
     fun uriOf(loc: String): Uri? {
+        if (loc.startsWith("url:")) return Uri.parse(loc.removePrefix("url:"))
         if (loc.startsWith("gen:")) return genDir?.let { Uri.fromFile(File(it, loc.removePrefix("gen:"))) }
         val sid = loc.substringBefore(':')
         val iid = loc.substringAfter(':')

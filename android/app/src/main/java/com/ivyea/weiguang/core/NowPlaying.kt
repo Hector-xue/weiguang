@@ -144,7 +144,7 @@ object NowPlaying {
         val items = q.mapNotNull { qi ->
             val d = qi.description
             val t = d.title?.toString()?.trim() ?: ""
-            val a = d.subtitle?.toString()?.trim() ?: ""
+            val a = Meta.subtitle(t, d.subtitle?.toString()?.trim() ?: "")
             val id = Library.idOf(pkg, d.mediaId, t, a) ?: return@mapNotNull null
             Triple(id, t, a)
         }
@@ -166,9 +166,10 @@ object NowPlaying {
         val st = c?.playbackState
         if (c == null || (m == null && st == null)) { _now.value = null; return }
         val like = likeAction(c)
-        val title = m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
-        val artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
         val dur = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val clean = Meta.live(c.packageName, m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "", m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "", dur)
+        val title = clean.title
+        val artist = clean.artist
         val music = Players.isKnown(c.packageName)
         val songId = if (music) Library.idOf(c.packageName, m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID), title, artist) else null
         val nid = when {
@@ -190,7 +191,7 @@ object NowPlaying {
             playing = st?.state == PlaybackState.STATE_PLAYING,
             songId = songId,
             nid = nid,
-            lyric = m?.getString("ucar.media.metadata.LYRICS_LINE")?.trim()?.takeIf { it.isNotEmpty() },
+            lyric = m?.getString("ucar.media.metadata.LYRICS_LINE")?.trim()?.takeIf { it.isNotEmpty() } ?: clean.lyric,
             likeIcon = like?.let { icon(c.packageName, it.icon) },
             hasLike = like != null,
         )
