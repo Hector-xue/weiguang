@@ -91,7 +91,7 @@ object Library {
     }
 
     // 没见过的歌给一个固定的负数 ID（同一首歌每次算出来都一样）
-    private fun localId(key: String): Long {
+    fun localId(key: String): Long {
         var h = -0x340d631b7bdddcdbL
         for (b in key.toByteArray()) { h = h xor (b.toLong() and 0xff); h *= 0x100000001b3L }
         return -((h ushr 1) or 1L)
@@ -377,6 +377,17 @@ object Library {
 
     // AI 作曲的歌放进「微光作曲」歌单
     const val GEN = "${Local.PKG}|gen"
+
+    // 微光自己的音源（免费曲库）放之前先记进曲库，播放器报上来的 wg:<id> 才对得上
+    fun addOwn(list: List<Song>) {
+        val s = _state.value
+        val fresh = list.filter { it.id !in s.songs }
+        if (fresh.isEmpty()) return
+        val songs = s.songs.toMutableMap()
+        for (x in fresh) { songs[x.id] = x; remember(x) }
+        _state.value = s.copy(songs = songs)
+        save()
+    }
 
     fun addGenerated(title: String, artist: String, file: String): Song {
         val k = keyOf(title, artist + file)

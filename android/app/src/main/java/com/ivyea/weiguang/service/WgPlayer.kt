@@ -17,7 +17,7 @@ import com.ivyea.weiguang.MainActivity
 import com.ivyea.weiguang.core.Prefs
 import com.ivyea.weiguang.core.Sources
 
-// 微光自己的播放器：放自建曲库（Navidrome/Jellyfin/WebDAV）和 AI 作曲的歌。
+// 微光自己的播放器：放自建曲库（Navidrome/Jellyfin/WebDAV）、免费曲库、网络电台和 AI 作曲的歌。
 // 系统播放会话、通知栏、耳机线控都由 Media3 管；微光读它和读别的 App 一样
 class WgPlayer : MediaSessionService() {
     private var session: MediaSession? = null
@@ -39,6 +39,12 @@ class WgPlayer : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        // 台挂了、歌下不来就跳下一个，别停在那儿
+        player.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); player.play() }
+            }
+        })
         session = MediaSession.Builder(this, player)
             .setSessionActivity(PendingIntent.getActivity(
                 this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,

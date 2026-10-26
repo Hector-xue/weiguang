@@ -102,7 +102,7 @@ object Players {
                 val other = installed(app).firstOrNull()?.pkg?.takeIf { Prefs.player != Local.PKG }
                 if (other == null) {
                     toast(app, if (Sources.servers.isEmpty()) "微光自己没有这首，先放微光电台" else "自建曲库里没有这首，先放微光电台")
-                    Radio.play(app)?.let { toast(app, it) }
+                    Free.playMood(app)?.let { toast(app, it) }
                     return@launch
                 }
                 toast(app, "自建曲库里没有这首，换${nameOf(other)}放")
@@ -269,7 +269,7 @@ object Players {
                     if (NowPlaying.now.value?.playing == true) return@launch
                 }
             }
-            Radio.play(app)?.let { toast(app, it) }
+            Free.playMood(app)?.let { toast(app, it) }
         }
     }
 

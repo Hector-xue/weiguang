@@ -141,8 +141,18 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
             }
         }
 
-        if (empty) {
+        if (empty && tab != 4) {
             item { EmptyLibrary(lib, time, sync) }
+            item {
+                Text(
+                    "先听微光电台和免费音乐", fontSize = 14.sp, color = accent, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp).clickable { tab = 4 }.padding(vertical = 10.dp),
+                )
+            }
+            return@LazyColumn
+        }
+        if (empty) {
+            item { RadioView(now, accent) }
             return@LazyColumn
         }
 
@@ -170,7 +180,9 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
         }
 
         item { Tabs(tab, accent) { tab = it } }
-        if (tab == 3) {
+        if (tab == 4) {
+            item { RadioView(now, accent) }
+        } else if (tab == 3) {
             item { DiaryView(lib, accent) }
         } else if (tab == 2) {
             item { StarMap(lib, now, accent, time) }
@@ -250,14 +262,14 @@ private fun SyncChip(syncing: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SearchBox(q: String, onChange: (String) -> Unit) {
+internal fun SearchBox(q: String, hint: String = "搜歌名或歌手", onChange: (String) -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(top = 16.dp).glass(999.dp, 2.dp).padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Search, null, tint = Wg.ink3, modifier = Modifier.size(17.dp))
         Box(Modifier.weight(1f).padding(start = 10.dp)) {
-            if (q.isEmpty()) Text("搜歌名或歌手", fontSize = 14.sp, color = Wg.ink3)
+            if (q.isEmpty()) Text(hint, fontSize = 14.sp, color = Wg.ink3)
             BasicTextField(
                 value = q, onValueChange = onChange, singleLine = true,
                 textStyle = TextStyle(fontSize = 14.sp, color = Wg.ink),
@@ -273,7 +285,7 @@ private fun SearchBox(q: String, onChange: (String) -> Unit) {
 @Composable
 private fun Tabs(tab: Int, accent: Color, onTab: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 14.dp)) {
-        listOf("歌单", "听过", "星图", "日记").forEachIndexed { i, label ->
+        listOf("歌单", "听过", "星图", "日记", "电台").forEachIndexed { i, label ->
             val sel = i == tab
             Column(
                 Modifier.padding(end = 26.dp).clickable { onTab(i) },
@@ -347,12 +359,12 @@ private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () ->
 }
 
 @Composable
-private fun Quiet(s: String) {
+internal fun Quiet(s: String) {
     Text(s, fontSize = 13.sp, color = Wg.ink3, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp))
 }
 
 @Composable
-private fun SongRow(s: Song, now: Now?, accent: Color, extra: String?, onClick: () -> Unit) {
+internal fun SongRow(s: Song, now: Now?, accent: Color, extra: String?, onClick: () -> Unit) {
     val playing = now?.songId == s.id
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick)

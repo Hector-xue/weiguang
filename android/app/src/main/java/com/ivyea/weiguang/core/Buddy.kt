@@ -372,7 +372,7 @@ object Buddy {
             stopQueue()
             val app = ctx.applicationContext
             CoroutineScope(Dispatchers.Main).launch {
-                Radio.play(app, f.name)?.let { android.widget.Toast.makeText(app, it, android.widget.Toast.LENGTH_SHORT).show() }
+                Free.playMood(app, f.name)?.let { android.widget.Toast.makeText(app, it, android.widget.Toast.LENGTH_SHORT).show() }
             }
             return
         }

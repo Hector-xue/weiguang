@@ -61,6 +61,10 @@ object Prefs {
 
     // 参考天气（要大致位置权限）；默认关
     // 打开微光就开始放（没在放的话）：接着放正在用的 App，没有 App 就放微光自己的电台
+    var radioFav: String
+        get() = sp?.getString("radioFav", "[]") ?: "[]"
+        set(v) { sp?.edit()?.putString("radioFav", v)?.apply() }
+
     var autoplay: Boolean
         get() = sp?.getBoolean("autoplay", true) ?: true
         set(v) { sp?.edit()?.putBoolean("autoplay", v)?.apply() }

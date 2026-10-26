@@ -34,6 +34,7 @@ object Local {
         return MediaItem.Builder()
             .setMediaId(if (s.loc?.startsWith("url:") == true) "radio:${s.id}" else "wg:${s.id}")
             .setUri(uri)
+            .apply { if (uri.toString().contains(".m3u8")) setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8) }
             .setMediaMetadata(
                 MediaMetadata.Builder().setTitle(s.title).setArtist(s.artist)
                     .setArtworkUri(s.pic?.takeIf { it.startsWith("http") }?.let { Uri.parse(it) }).build(),
