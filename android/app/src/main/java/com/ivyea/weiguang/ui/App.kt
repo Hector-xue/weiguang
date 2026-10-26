@@ -107,8 +107,9 @@ fun App() {
 // 整个界面（背景 + 当前页 + 底栏）；截图测试直接渲染它
 @Composable
 internal fun Shell(tab: Int, listenerOn: Boolean, now: Now?, lib: LibState, m: Mood, time: State<Float>, onTab: (Int) -> Unit) {
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(m.a, m.b, m.c), start = Offset.Zero, end = Offset.Infinite))) {
-        Dust(Modifier.fillMaxSize(), time)
+    Box(Modifier.fillMaxSize()) {
+        Backdrop(m, time, Modifier.fillMaxSize())
+        Dust(Modifier.fillMaxSize(), time, count = 28)
         if (!listenerOn) {
             Onboarding(time)
             return@Box
@@ -125,16 +126,24 @@ internal fun Shell(tab: Int, listenerOn: Boolean, now: Now?, lib: LibState, m: M
     }
 }
 
+// 底栏：一条轻玻璃，选中的字变深、下面亮一颗光点
 @Composable
 private fun Dock(tab: Int, modifier: Modifier, onTab: (Int) -> Unit) {
-    Row(modifier.navigationBarsPadding().padding(bottom = 14.dp).glass(999.dp, 14.dp).padding(5.dp)) {
+    Row(
+        modifier.navigationBarsPadding().padding(bottom = 12.dp).glass(999.dp, 18.dp)
+            .background(Color.White.copy(alpha = 0.35f)).padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
         listOf("此刻", "播放", "曲库", "设置").forEachIndexed { i, label ->
             val sel = i == tab
-            Box(
-                Modifier.clip(RoundedCornerShape(999.dp)).background(if (sel) Color.White else Color.Transparent)
-                    .clickable { onTab(i) }.padding(horizontal = 19.dp, vertical = 11.dp),
+            Column(
+                Modifier.clip(RoundedCornerShape(999.dp)).clickable { onTab(i) }.padding(horizontal = 18.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(label, fontSize = 14.sp, color = if (sel) Wg.ink else Wg.ink2, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                Text(label, fontSize = 14.5.sp, color = if (sel) Wg.ink else Wg.ink3, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                Box(
+                    Modifier.padding(top = 4.dp).size(4.dp).clip(CircleShape)
+                        .background(if (sel) Wg.warm else Color.Transparent),
+                )
             }
         }
     }
@@ -151,7 +160,7 @@ private fun Onboarding(time: State<Float>) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ParticleOrb(Modifier.fillMaxWidth().height(300.dp), time, { 0.5f })
-        Text("微光", fontSize = 34.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+        Text("微光", fontFamily = Wg.serif, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
         Text("懂你此刻的听歌伙伴", fontSize = 16.sp, color = Wg.ink2, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(32.dp))
         Step(

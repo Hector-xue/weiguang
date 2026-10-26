@@ -93,7 +93,7 @@ fun SettingsPage() {
         Modifier.fillMaxSize().statusBarsPadding()
             .verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
     ) {
-        Text("设置", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+        PageTitle("设置")
         Spacer(Modifier.height(20.dp))
 
         Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp)) {
