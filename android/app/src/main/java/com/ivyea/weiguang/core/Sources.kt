@@ -33,8 +33,11 @@ data class ServerData(val lists: List<Triple<String, String, List<Item>>>)
 object Sources {
     val kinds = linkedMapOf("subsonic" to "Navidrome / Subsonic", "jellyfin" to "Jellyfin / Emby", "webdav" to "WebDAV")
 
+    // 有的服务器挂在 Cloudflare 后面，会拦 okhttp 默认的 UA
     private val http = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+        .connectTimeout(10, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
+        .addInterceptor { it.proceed(it.request().newBuilder().header("User-Agent", "Weiguang").build()) }
+        .build()
 
     private var genDir: File? = null
 
@@ -160,8 +163,9 @@ object Sources {
         }
     }
 
+    // 新版 Jellyfin 默认只认 Authorization 里的 Token（X-Emby-Token 是旧写法，留给 Emby）；两个一起带，实测不冲突
     private fun jelly(s: Server, path: String): JSONObject =
-        JSONObject(get("${s.url}$path", mapOf("X-Emby-Token" to s.token)))
+        JSONObject(get("${s.url}$path", mapOf("Authorization" to "$CLIENT, Token=\"${s.token}\"", "X-Emby-Token" to s.token)))
 
     private fun jellyItem(s: Server, o: JSONObject): Item {
         val img = when {
