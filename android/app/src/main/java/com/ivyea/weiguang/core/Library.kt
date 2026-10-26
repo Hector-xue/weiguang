@@ -366,11 +366,21 @@ object Library {
             set { it.copy(syncMsg = "网易云 ${i + 1}/${lists.size} · $name") }
             val ids = ArrayList<Long>()
             for (item in all(b, pl.mediaId!!)) if (item.isPlayable) songOf(songs, item, Ncm.PKG)?.let { ids += it }
-            // 车机接口给得不全时，保留以前从播放队列补全的那份
+            // 车机接口每个歌单只给前 12 首：按歌单 ID 去网页版公开接口要整张
+            val full = Regex("(\\d+)$").find(pl.mediaId!!)?.value?.let { Cloud.playlist(it) }
+            if (full != null && full.size > ids.size) {
+                ids.clear()
+                for (x in full) {
+                    val old = songs[x.id]
+                    songs[x.id] = old?.copy(title = x.title.ifEmpty { old.title }, artist = x.artist.ifEmpty { old.artist }, pic = old.pic?.takeIf { it.isNotEmpty() } ?: x.pic) ?: x
+                    ids += x.id
+                }
+            }
+            // 还是不全时，保留以前从播放队列补全的那份
             val old = _state.value.playlists.firstOrNull { it.id == pl.mediaId }
             val keep = if (old != null && old.songIds.size > ids.size) old.songIds else ids
             out += Playlist(pl.mediaId!!, name, keep)
-            log.append(name).append("：接口给 ").append(ids.size).append(" 首").append(if (keep !== ids) "，保留补全的 ${keep.size} 首" else "").append('\n')
+            log.append(name).append("：").append(ids.size).append(" 首").append(if (full != null && full.size >= ids.size) "（整张）" else "（车机接口，私密歌单只给前 12 首）").append(if (keep !== ids) "，保留补全的 ${keep.size} 首" else "").append('\n')
         }
         return out
     }

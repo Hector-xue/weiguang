@@ -74,6 +74,39 @@ object Cloud {
         return out.sortedBy { it.t }
     }
 
+    // 整张歌单：车机接口每个歌单只给前 12 首，这里按歌单 ID 向网页版公开接口要全部。
+    // 先拿全部歌曲 ID，接口顺带给的歌直接用，缺的再按 100 首一批查。私密歌单、网络问题返回 null
+    suspend fun playlist(id: String): List<Song>? = withContext(Dispatchers.IO) {
+        val raw = get("https://music.163.com/api/v6/playlist/detail?id=$id&n=100000") ?: return@withContext null
+        try {
+            val o = JSONObject(raw)
+            if (o.optInt("code") != 200) return@withContext null
+            val p = o.optJSONObject("playlist") ?: return@withContext null
+            val order = p.optJSONArray("trackIds")?.let { a -> List(a.length()) { a.getJSONObject(it).getLong("id") } } ?: return@withContext null
+            val got = HashMap<Long, Song>()
+            p.optJSONArray("tracks")?.let { a ->
+                for (i in 0 until a.length()) {
+                    val t = a.getJSONObject(i)
+                    val ar = t.optJSONArray("ar")?.let { x -> List(x.length()) { x.getJSONObject(it).optString("name") } } ?: emptyList()
+                    val pic = t.optJSONObject("al")?.optString("picUrl").orEmpty().replace("http://", "https://")
+                    got[t.getLong("id")] = Song(t.getLong("id"), t.optString("name"), ar.joinToString("/"), pic = pic.takeIf { it.startsWith("http") })
+                }
+            }
+            for (batch in order.filter { it !in got }.chunked(100)) {
+                val r = get("https://music.163.com/api/song/detail/?ids=" + java.net.URLEncoder.encode(batch.joinToString(",", "[", "]"), "UTF-8")) ?: break
+                val a = JSONObject(r).optJSONArray("songs") ?: break
+                for (i in 0 until a.length()) {
+                    val t = a.getJSONObject(i)
+                    val ar = t.optJSONArray("artists")?.let { x -> List(x.length()) { x.getJSONObject(it).optString("name") } } ?: emptyList()
+                    val pic = t.optJSONObject("album")?.optString("picUrl").orEmpty().replace("http://", "https://")
+                    got[t.getLong("id")] = Song(t.getLong("id"), t.optString("name"), ar.joinToString("/"), pic = pic.takeIf { it.startsWith("http") })
+                }
+                kotlinx.coroutines.delay(200)
+            }
+            order.mapNotNull { got[it] }
+        } catch (_: Throwable) { null }
+    }
+
     // 一次最多查 100 首的专辑封面地址；查不到的歌不在结果里
     suspend fun covers(ids: List<Long>): Map<Long, String>? {
         if (ids.isEmpty()) return emptyMap()
