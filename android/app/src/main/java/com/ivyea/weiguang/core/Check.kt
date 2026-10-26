@@ -38,7 +38,7 @@ object Check {
             if (c == null) { b.appendLine("  播放会话: 没有（没打开或没放过歌）"); b.appendLine(); continue }
             val st = c.playbackState
             val a = st?.actions ?: 0L
-            b.appendLine("  会话: 状态=${st?.state} 支持=${acts.filter { a and it.first != 0L }.joinToString("/") { it.second }.ifEmpty { "无" }}")
+            b.appendLine("  会话: 状态=${st?.state} 支持=${acts.filter { (a and it.first) != 0L }.joinToString("/") { it.second }.ifEmpty { "无" }}")
             st?.customActions?.takeIf { it.isNotEmpty() }?.let { l -> b.appendLine("  自定义按钮: " + l.joinToString { "${clip(it.name, 12)}(${it.action.substringAfterLast('.')})" }) }
             val m = c.metadata
             if (m != null) {
