@@ -50,7 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.core.Buddy
+import com.ivyea.weiguang.core.LibState
 import com.ivyea.weiguang.core.Library
+import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
 import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Weather
@@ -99,35 +101,49 @@ fun App() {
 
     BackHandler(enabled = tab != 0) { tab = 0 }
 
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(a, b, c), start = Offset.Zero, end = Offset.Infinite))) {
-        Dust(Modifier.fillMaxSize(), time)
+    Shell(tab, listenerOn, now, lib, Mood(a, b, c, accent), time) { tab = it }
+}
+
+// 整个界面（背景 + 当前页 + 底栏）；截图测试直接渲染它
+@Composable
+internal fun Shell(tab: Int, listenerOn: Boolean, now: Now?, lib: LibState, m: Mood, time: State<Float>, onTab: (Int) -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        Backdrop(m, time, Modifier.fillMaxSize())
+        Dust(Modifier.fillMaxSize(), time, count = 28)
         if (!listenerOn) {
             Onboarding(time)
             return@Box
         }
-        val m = Mood(a, b, c, accent)
         Crossfade(targetState = tab, animationSpec = tween(260), label = "tab") { t ->
             when (t) {
-                0 -> MomentScreen(now, accent, time, onOpenPlayer = { tab = 1 }, onOpenSettings = { tab = 3 })
+                0 -> MomentScreen(now, m.accent, time, onOpenPlayer = { onTab(1) }, onOpenSettings = { onTab(3) })
                 1 -> NowScreen(now, m, time)
-                2 -> LibraryScreen(lib, now, accent, time)
+                2 -> LibraryScreen(lib, now, m.accent, time)
                 else -> SettingsPage()
             }
         }
-        Dock(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
+        Dock(tab, Modifier.align(Alignment.BottomCenter), onTab)
     }
 }
 
+// 底栏：一条轻玻璃，选中的字变深、下面亮一颗光点
 @Composable
 private fun Dock(tab: Int, modifier: Modifier, onTab: (Int) -> Unit) {
-    Row(modifier.navigationBarsPadding().padding(bottom = 14.dp).glass(999.dp, 14.dp).padding(5.dp)) {
+    Row(
+        modifier.navigationBarsPadding().padding(bottom = 12.dp).glass(999.dp, 18.dp)
+            .background(Color.White.copy(alpha = 0.35f)).padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
         listOf("此刻", "播放", "曲库", "设置").forEachIndexed { i, label ->
             val sel = i == tab
-            Box(
-                Modifier.clip(RoundedCornerShape(999.dp)).background(if (sel) Color.White else Color.Transparent)
-                    .clickable { onTab(i) }.padding(horizontal = 19.dp, vertical = 11.dp),
+            Column(
+                Modifier.clip(RoundedCornerShape(999.dp)).clickable { onTab(i) }.padding(horizontal = 18.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(label, fontSize = 14.sp, color = if (sel) Wg.ink else Wg.ink2, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                Text(label, fontSize = 14.5.sp, color = if (sel) Wg.ink else Wg.ink3, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                Box(
+                    Modifier.padding(top = 4.dp).size(4.dp).clip(CircleShape)
+                        .background(if (sel) Wg.warm else Color.Transparent),
+                )
             }
         }
     }
@@ -144,23 +160,23 @@ private fun Onboarding(time: State<Float>) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ParticleOrb(Modifier.fillMaxWidth().height(300.dp), time, { 0.5f })
-        Text("微光", fontSize = 34.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+        Text("微光", fontFamily = Wg.serif, fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
         Text("懂你此刻的听歌伙伴", fontSize = 16.sp, color = Wg.ink2, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(32.dp))
         Step(
             "1", "读取正在播放",
-            "打开「通知使用权」，微光才知道音乐 App 在放什么。只读播放信息，不看你的通知内容。",
+            "开「通知使用权」，微光才知道在放什么。只读播放信息。",
             done = false, action = "去开启",
         ) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         Spacer(Modifier.height(12.dp))
         Step(
-            "2", if (apps.isNotEmpty()) "音乐 App 已就绪" else "还没装音乐 App",
-            if (apps.isNotEmpty()) apps.map { it.short }.distinct().joinToString("、").let { "$it。网易云能读歌单、按歌点播，其他 App 读播放和控制" }
-            else "网易云、QQ音乐、酷狗、酷我、汽水都行；网易云配合得最好",
+            "2", if (apps.isNotEmpty()) "音乐 App 已就绪" else "不装音乐 App 也行",
+            if (apps.isNotEmpty()) apps.map { it.short }.distinct().joinToString("、").let { "$it，都能陪着听" }
+            else "微光自带免费曲库和电台；装了网易云能同步你的歌单",
             done = apps.isNotEmpty(), action = if (apps.isNotEmpty()) "" else "去下载",
         ) { Players.openStore(ctx) }
         Text(
-            "粒子频谱和悬浮光球在设置里，随时可以开。",
+            "粒子频谱、悬浮光球在设置里",
             fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 20.dp, bottom = 32.dp),
         )
     }

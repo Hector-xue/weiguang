@@ -100,6 +100,8 @@ object NowPlaying {
 
     private fun comp(c: Context) = ComponentName(c, NowListener::class.java)
 
+    internal fun preview(n: Now?) { _now.value = n }
+
     fun controllerOf(pkg: String): MediaController? = all.firstOrNull { it.packageName == pkg }
 
     private fun watch(list: List<MediaController>) {

@@ -131,7 +131,7 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
 
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("曲库", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, modifier = Modifier.weight(1f))
+                PageTitle("曲库", Modifier.weight(1f))
                 if (!empty) SyncChip(lib.syncing, sync)
             }
             if (!empty) {
@@ -190,7 +190,7 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
         } else if (tab == 0) {
             if (lib.playlists.isEmpty()) item { Quiet("还没有歌单，点右上角同步") }
             else items(lib.playlists.chunked(2), key = { row -> row.joinToString { it.id } }) { row ->
-                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     for (p in row) PlaylistCard(p, Modifier.weight(1f)) { openPl = p.id }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
@@ -318,12 +318,13 @@ private fun PlaylistArt(p: Playlist, modifier: Modifier, radius: Int, big: Boole
     }
 }
 
+// 歌单：封面直接铺满（不套白框），下面宋体歌单名 + 首数
 @Composable
 private fun PlaylistCard(p: Playlist, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.glass(20.dp, 4.dp).clickable(onClick = onClick).padding(10.dp)) {
-        PlaylistArt(p, Modifier.fillMaxWidth().aspectRatio(1f), 14, true)
-        Text(p.name, fontSize = 14.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp, start = 2.dp))
-        Text("${p.songIds.size} 首", fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 2.dp, start = 2.dp, bottom = 2.dp))
+    Column(modifier.clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick).padding(bottom = 4.dp)) {
+        PlaylistArt(p, Modifier.fillMaxWidth().aspectRatio(1f).shadow(10.dp, RoundedCornerShape(20.dp), spotColor = Color(0x55785AAA)), 20, true)
+        Text(p.name, fontFamily = Wg.serif, fontSize = 15.5.sp, fontWeight = FontWeight.Medium, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp, start = 4.dp))
+        Text("${p.songIds.size} 首", fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 2.dp, start = 4.dp))
     }
 }
 
@@ -333,9 +334,9 @@ private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () ->
     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Text("‹ 曲库", fontSize = 14.sp, color = Wg.ink2, modifier = Modifier.clickable(onClick = onBack).padding(vertical = 6.dp))
         Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            PlaylistArt(p, Modifier.size(96.dp).shadow(16.dp, RoundedCornerShape(20.dp), spotColor = accent), 20, false)
+            PlaylistArt(p, Modifier.size(112.dp).shadow(16.dp, RoundedCornerShape(22.dp), spotColor = accent), 22, false)
             Column(Modifier.padding(start = 14.dp)) {
-                Text(p.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(p.name, fontFamily = Wg.serif, fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("$count 首 · ${if (p.src == com.ivyea.weiguang.core.Local.PKG) "微光自己放" else Players.nameOf(p.src)}", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(top = 4.dp))
             }
         }
@@ -351,9 +352,9 @@ private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () ->
                     .clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
-        if (ncm && count in 1..12) {
+        if (ncm && count == 12) {
             Text(
-                "网易云只给微光看前几首。在网易云里点「播放全部」一次，微光就能从播放队列补全整个歌单。",
+                "可能是私密歌单，网易云只给了前 12 首。把它设成公开再同步一次，或者在网易云里点「播放全部」，微光会从播放队列补全。",
                 fontSize = 12.sp, color = Wg.ink3, lineHeight = 18.sp, modifier = Modifier.padding(top = 10.dp),
             )
         }

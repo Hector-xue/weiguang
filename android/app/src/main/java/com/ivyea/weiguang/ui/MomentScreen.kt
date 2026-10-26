@@ -1,5 +1,10 @@
 package com.ivyea.weiguang.ui
 
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -22,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -94,12 +100,15 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
 
     var sheet by rememberSaveable { mutableStateOf("") }
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 20.dp).padding(bottom = 92.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.drawable.logo_mark), null, Modifier.size(28.dp).shadow(10.dp, CircleShape, spotColor = Wg.warm).clip(CircleShape))
-            Text("微光", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, modifier = Modifier.padding(start = 10.dp))
-            Box(Modifier.padding(start = 8.dp).size(6.dp).clip(CircleShape).background(if (now?.playing == true) Wg.ok else Wg.ink3))
-            Text(if (busy) "在想…" else if (now?.playing == true) "在听你" else "在这儿", fontSize = 13.sp, color = Wg.ink2, modifier = Modifier.padding(start = 6.dp))
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 22.dp).padding(bottom = 92.dp)) {
+        // 顶栏：时段 + 在听哪个 App；开着电台时一个小标签；聊起来以后能清空
+        Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(daypart(), fontSize = 13.sp, color = Wg.ink2)
+            Box(Modifier.padding(start = 10.dp).size(5.dp).clip(CircleShape).background(if (now?.playing == true) Wg.ok else Wg.ink3))
+            Text(
+                when { busy -> "在想…"; now?.playing == true -> "${Players.nameOf(now.pkg)} · 在听"; now != null -> "${Players.nameOf(now.pkg)} · 暂停"; else -> "在这儿" },
+                fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(start = 6.dp),
+            )
             Spacer(Modifier.weight(1f))
             radio?.let { f ->
                 Row(
@@ -114,32 +123,39 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
             if (msgs.isNotEmpty()) Text("清空", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.clickable { Buddy.clearChat() }.padding(6.dp))
         }
 
-        // 光球 + 心里话：聊起来以后收小，把位置让给对话
+        // 光球 + 微光的心里话（宋体大字）；聊起来以后收成一行，把位置让给对话
         val compact = msgs.isNotEmpty()
-        Box(Modifier.fillMaxWidth().height(if (compact) 120.dp else 200.dp), contentAlignment = Alignment.Center) {
-            ParticleOrb(
-                Modifier.fillMaxSize(), time,
-                {
-                    val b = bands.value
-                    val live = if (Spectrum.live && now?.playing == true) b.take(12).average().toFloat() else 0f
-                    if (busy) 0.9f else 0.25f + live
-                },
-                accent,
-            )
+        val energy = {
+            val b = bands.value
+            val live = if (Spectrum.live && now?.playing == true) b.take(12).average().toFloat() else 0f
+            if (busy) 0.9f else 0.25f + live
         }
-        if (!compact) {
-            Text("微光在想…", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF5B57A0))
-            Text(
-                thought ?: "", fontSize = 14.sp, color = Wg.ink2, lineHeight = 22.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            if (!Ai.ready) {
+        if (compact) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                ParticleOrb(Modifier.size(60.dp), time, energy, accent)
                 Text(
-                    "在设置里填上 AI 密钥，微光会更懂你 →", fontSize = 12.sp, color = Wg.lav,
-                    modifier = Modifier.padding(top = 8.dp).clickable(onClick = onOpenSettings),
+                    thought ?: "", fontFamily = Wg.serif, fontSize = 14.5.sp, lineHeight = 21.sp, color = Wg.ink2,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 6.dp),
                 )
             }
-            Spacer(Modifier.height(16.dp))
+        } else {
+            Box(Modifier.fillMaxWidth()) {
+                ParticleOrb(Modifier.size(180.dp).align(Alignment.TopEnd).offset(x = 46.dp, y = (-18).dp), time, energy, accent)
+                Column(Modifier.padding(top = 70.dp, end = 30.dp, bottom = 22.dp)) {
+                    Eyebrow("微光在想", color = accent)
+                    Text(
+                        thought ?: "今天想听点什么？", fontFamily = Wg.serif, fontSize = 23.sp, lineHeight = 35.sp,
+                        fontWeight = FontWeight.Medium, color = Wg.ink, modifier = Modifier.padding(top = 10.dp),
+                        maxLines = 4, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (!Ai.ready) {
+                        Text(
+                            "填上 AI 密钥，微光会更懂你 →", fontSize = 12.sp, color = Wg.lav,
+                            modifier = Modifier.padding(top = 10.dp).clickable(onClick = onOpenSettings),
+                        )
+                    }
+                }
+            }
         }
 
         if (now != null) MiniPlayer(now, accent, onOpenPlayer)
@@ -147,7 +163,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
         LazyColumn(
             Modifier.fillMaxWidth().weight(1f).padding(top = 10.dp),
             state = list,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (msgs.isEmpty()) 26.dp else 10.dp),
         ) {
             if (msgs.isEmpty()) {
                 item { FeelCard { f -> scope.launch { Buddy.feel(f) } } }
@@ -213,26 +229,39 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     }
 }
 
+// 正在放的歌：封面 + 宋体歌名 + 当前这句歌词，底下一道细细的进度光
 @Composable
 private fun MiniPlayer(now: Now, accent: Color, onOpen: () -> Unit) {
     val img = remember(now.art) { now.art?.asImageBitmap() }
-    Row(Modifier.fillMaxWidth().glass(20.dp, 6.dp).clickable(onClick = onOpen).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Color(0xFFC8C2F2), Color(0xFFFFE2A8))))) {
-            if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+    val frac by produceState(0f, now) {
+        while (true) { value = if (now.durationMs > 0) (now.positionNow().toFloat() / now.durationMs).coerceIn(0f, 1f) else 0f; delay(500) }
+    }
+    Column(Modifier.fillMaxWidth().glass(22.dp, 8.dp).clickable(onClick = onOpen)) {
+        Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(54.dp).shadow(10.dp, RoundedCornerShape(14.dp), spotColor = accent).clip(RoundedCornerShape(14.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFFC8C2F2), Color(0xFFFFE2A8)))),
+            ) {
+                if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            }
+            Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                Text(now.title, fontFamily = Wg.serif, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val lyric = Buddy.isLyric(now.lyric)
+                Text(
+                    if (lyric) now.lyric!! else now.artist,
+                    fontSize = 12.5.sp, color = if (lyric) accent else Wg.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            Box(
+                Modifier.size(42.dp).shadow(8.dp, CircleShape, spotColor = accent).clip(CircleShape).background(Color.White).clickable { NowPlaying.toggle() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Glyph(if (now.playing) G.Pause else G.Play, accent, Modifier.size(16.dp))
+            }
         }
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(now.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                if (Buddy.isLyric(now.lyric)) now.lyric!! else now.artist,
-                fontSize = 12.sp, color = if (Buddy.isLyric(now.lyric)) accent else Wg.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        Box(
-            Modifier.size(40.dp).shadow(10.dp, CircleShape, spotColor = accent).clip(CircleShape).background(Color.White).clickable { NowPlaying.toggle() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Glyph(if (now.playing) G.Pause else G.Play, accent, Modifier.size(16.dp))
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 1.dp).height(2.dp).clip(RoundedCornerShape(1.dp)).background(accent.copy(alpha = 0.12f))) {
+            Box(Modifier.fillMaxWidth(frac).height(2.dp).background(Brush.horizontalGradient(listOf(Wg.warm2, accent))))
         }
     }
 }
@@ -317,23 +346,30 @@ fun Thumb(s: Song, sizeDp: Int) {
     }
 }
 
-// 此刻的心情：点一个，微光按情绪从曲库里排一段路；低落/疲惫/烦躁会先接住、再慢慢带出来
+// 此刻的心情：八颗颜色不同的光，点一颗，微光按情绪从曲库里排一段路；低落/疲惫/烦躁会先接住、再慢慢带出来
 @Composable
 private fun FeelCard(onFeel: (Feel) -> Unit) {
-    Column(Modifier.fillMaxWidth().glass(22.dp, 4.dp).padding(16.dp)) {
-        Text("此刻的心情", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
-        Text("选一个，微光按情绪从你的曲库里排一段歌", fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 3.dp, bottom = 12.dp))
+    Column(Modifier.fillMaxWidth()) {
+        Eyebrow("此刻的心情")
+        Spacer(Modifier.height(8.dp))
         Feels.chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
                 row.forEach { f ->
                     val c = feelColor(f.v, f.e)
-                    Row(
-                        Modifier.weight(1f).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.7f))
-                            .clickable { onFeel(f) }.padding(vertical = 9.dp),
-                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable { onFeel(f) }.padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Box(Modifier.size(7.dp).shadow(4.dp, CircleShape, spotColor = c).clip(CircleShape).background(c))
-                        Text(f.name, fontSize = 13.sp, color = Wg.ink, modifier = Modifier.padding(start = 6.dp))
+                        Box(
+                            Modifier.size(40.dp).background(Brush.radialGradient(listOf(c.copy(alpha = 0.75f), c.copy(alpha = 0.22f), Color.Transparent))),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                Modifier.size(20.dp).shadow(6.dp, CircleShape, spotColor = c).clip(CircleShape)
+                                    .background(Brush.radialGradient(listOf(Color.White, c), radius = 30f)),
+                            )
+                        }
+                        Text(f.name, fontSize = 13.sp, color = Wg.ink2, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
             }
@@ -348,29 +384,45 @@ private fun Habit(accent: Color) {
     val lib by Library.state.collectAsState()
     val songs = remember(lib.plays.size, lib.songs.size) { Buddy.habit(6) }
     if (songs.isEmpty()) return
-    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-        Text("这个点你常听", fontSize = 13.sp, color = Wg.ink2, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth()) {
+        Eyebrow("这个点你常听", color = accent)
+        Row(Modifier.fillMaxWidth().padding(top = 14.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             songs.forEach { s ->
-                Column(Modifier.size(width = 92.dp, height = 128.dp).clip(RoundedCornerShape(16.dp)).clickable { Players.play(ctx, s) }) {
-                    Thumb(s, 92)
-                    Text(s.title, fontSize = 12.5.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
-                    Text(s.artist, fontSize = 11.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
+                Column(Modifier.width(108.dp).clip(RoundedCornerShape(18.dp)).clickable { Players.play(ctx, s) }) {
+                    Box(Modifier.shadow(8.dp, RoundedCornerShape(18.dp), spotColor = accent)) { Thumb(s, 108) }
+                    Text(s.title, fontFamily = Wg.serif, fontSize = 14.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp, start = 2.dp))
+                    Text(s.artist, fontSize = 11.5.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp, top = 1.dp))
                 }
             }
         }
     }
 }
 
-// 哼一段认歌 / 让微光作一首
+// 哼一段认歌 / 让微光作一首：一条玻璃，中间一道发丝线
 @Composable
 private fun MakeRow(onHum: () -> Unit, onGen: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf(Triple("哼一段", "想不起歌名？哼给我听", onHum), Triple("作一首", "按此刻的心情写首歌", onGen)).forEach { (t, sub, f) ->
-            Column(Modifier.weight(1f).glass(18.dp, 3.dp).clickable(onClick = f).padding(14.dp)) {
-                Text(t, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
-                Text(sub, fontSize = 11.5.sp, color = Wg.ink3, modifier = Modifier.padding(top = 3.dp))
+    Row(Modifier.fillMaxWidth().glass(22.dp, 4.dp).height(IntrinsicSize.Min)) {
+        listOf(Triple("哼一段", "想不起歌名，哼给我听", onHum), Triple("作一首", "按此刻的心情写首歌", onGen)).forEachIndexed { i, (t, sub, f) ->
+            if (i == 1) Box(Modifier.padding(vertical = 14.dp).width(0.6.dp).fillMaxHeight().background(Wg.hair))
+            Row(Modifier.weight(1f).clickable(onClick = f).padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                val c = if (i == 0) Wg.lav else Wg.warm
+                Box(Modifier.size(34.dp).clip(CircleShape).background(c.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                    Text(if (i == 0) "♪" else "✦", fontSize = 15.sp, color = c)
+                }
+                Column(Modifier.padding(start = 10.dp)) {
+                    Text(t, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+                    Text(sub, fontSize = 11.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                }
             }
         }
     }
+}
+
+// 时段：清晨 / 上午 / 午后 / 傍晚 / 夜里 / 深夜，前面带星期
+private fun daypart(): String {
+    val c = java.util.Calendar.getInstance()
+    val h = c.get(java.util.Calendar.HOUR_OF_DAY)
+    val d = listOf("周日", "周一", "周二", "周三", "周四", "周五", "周六")[c.get(java.util.Calendar.DAY_OF_WEEK) - 1]
+    val p = when (h) { in 5..7 -> "清晨"; in 8..10 -> "上午"; in 11..12 -> "中午"; in 13..16 -> "午后"; in 17..18 -> "傍晚"; in 19..22 -> "夜里"; else -> "深夜" }
+    return "$d$p"
 }

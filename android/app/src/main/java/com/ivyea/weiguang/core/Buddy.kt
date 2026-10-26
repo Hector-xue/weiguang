@@ -46,6 +46,8 @@ object Buddy {
     val busy: StateFlow<Boolean> = _busy
     private val _thought = MutableStateFlow<String?>(null)
     val thought: StateFlow<String?> = _thought
+
+    internal fun preview(msgs: List<Msg>, thought: String?) { _msgs.value = msgs; _thought.value = thought }
     private var thoughtKey = ""
 
     private val _tagMsg = MutableStateFlow("")

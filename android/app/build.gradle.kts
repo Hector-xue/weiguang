@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("io.github.takahirom.roborazzi")
 }
 
 val build = (System.getenv("WG_BUILD") ?: "1").toInt()
@@ -46,6 +47,8 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     lint { abortOnError = false; checkReleaseBuilds = false }
+    // 截图测试（Robolectric + Roborazzi，在 CI 上渲染真实界面出 PNG）
+    testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
 dependencies {
@@ -66,4 +69,11 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
     // WebDAV 要 PROPFIND，系统自带的 HttpURLConnection 不支持
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.32.2")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

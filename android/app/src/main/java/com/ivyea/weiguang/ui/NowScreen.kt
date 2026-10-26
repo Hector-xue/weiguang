@@ -153,7 +153,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         }
         Text(
             now.title.ifEmpty { "未知歌曲" },
-            fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink,
+            fontFamily = Wg.serif, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink,
             maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
@@ -165,7 +165,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         if (!(showLyrics && canLyrics)) {
             Crossfade(targetState = cur ?: "", animationSpec = tween(450), label = "lyric", modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(28.dp)) { line ->
                 Text(
-                    line, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = mood.accent,
+                    line, fontFamily = Wg.serif, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = mood.accent,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().clickable(enabled = Buddy.isLyric(line)) { onExplain(line, lines?.getOrNull(idx)?.t) },
                 )
@@ -211,24 +211,19 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
     }
 }
 
+// 顶栏：居中一枚小标签，哪个 App、在听还是暂停
 @Composable
 private fun TopBar(now: Now?) {
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Image(
-            painterResource(R.drawable.logo_mark), contentDescription = null,
-            modifier = Modifier.size(28.dp).shadow(10.dp, CircleShape, spotColor = Wg.warm).clip(CircleShape),
-        )
-        Text("微光", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, modifier = Modifier.padding(start = 10.dp))
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp).height(36.dp), contentAlignment = Alignment.Center) {
         val status = when {
             now == null -> "等待音乐 App"
             now.playing -> "${Players.nameOf(now.pkg)} · 在听"
-            else -> "${Players.nameOf(now.pkg)} · 暂停"
+            else -> "${Players.nameOf(now.pkg)} · 已暂停"
         }
-        Row(Modifier.padding(start = 10.dp).glass(999.dp, 2.dp).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.glass(999.dp, 2.dp).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(if (now?.playing == true) Wg.ok else Wg.ink3))
-            Text(status, fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 6.dp))
+            Text(status, fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 7.dp))
         }
-        Spacer(Modifier.weight(1f))
     }
 }
 
@@ -432,7 +427,7 @@ private fun LyricsView(lines: List<LrcLine>, idx: Int, accent: Color, modifier: 
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        l.text, fontSize = 19.sp, lineHeight = 27.sp, textAlign = TextAlign.Center,
+                        l.text, fontFamily = Wg.serif, fontSize = 20.sp, lineHeight = 29.sp, textAlign = TextAlign.Center,
                         fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, color = if (on) accent else Wg.ink,
                     )
                     l.tr?.let {

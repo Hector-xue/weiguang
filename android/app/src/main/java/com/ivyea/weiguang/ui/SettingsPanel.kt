@@ -93,13 +93,13 @@ fun SettingsPage() {
         Modifier.fillMaxSize().statusBarsPadding()
             .verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
     ) {
-        Text("设置", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+        PageTitle("设置")
         Spacer(Modifier.height(20.dp))
 
         Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp)) {
             SwitchRow(
                 "粒子跟着音乐跳",
-                if (granted) "读取播放声音的强弱，不录音、不上传" else "需要录音权限（只读声音强弱）",
+                if (granted) "只读声音强弱，不录音" else "要录音权限，只读声音强弱",
                 spectrum && granted,
             ) { on ->
                 if (!on) { Prefs.spectrum = false; spectrum = false; Spectrum.stop() }
@@ -109,7 +109,7 @@ fun SettingsPage() {
             Line()
             SwitchRow(
                 "悬浮光球",
-                if (canOverlay) "浮在其他 App 上，点一下回到微光；点歌后会自动跳回" else "需要「显示在其他应用上层」权限；开了以后点歌能自动跳回",
+                if (canOverlay) "点歌后自动跳回微光" else "要悬浮窗权限，点歌后自动跳回",
                 orb && canOverlay,
             ) { on ->
                 Prefs.orb = on; orb = on
@@ -121,7 +121,7 @@ fun SettingsPage() {
             Line()
             SwitchRow(
                 "参考天气",
-                if (located) "下雨、天晴时挑歌不一样；只用大致位置（约 10 公里）" else "需要大致位置权限；只用来查天气",
+                if (located) "晴雨天挑歌不一样" else "要大致位置，只查天气",
                 weather && located,
             ) { on ->
                 if (!on) { Prefs.weather = false; weather = false }
@@ -129,7 +129,7 @@ fun SettingsPage() {
                 else askLoc.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
             }
             Line()
-            SwitchRow("打开就放", "没在放歌时，打开微光接着放上次的 App；放不起来就放微光电台", autoplay) { on ->
+            SwitchRow("打开就放", "接着放上次的，放不起来就放电台", autoplay) { on ->
                 Prefs.autoplay = on; autoplay = on
             }
         }
