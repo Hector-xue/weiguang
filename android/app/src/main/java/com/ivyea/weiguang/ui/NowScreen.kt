@@ -80,7 +80,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import android.os.SystemClock
-import com.ivyea.weiguang.core.Ncm
+import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
 import com.ivyea.weiguang.core.Prefs
@@ -100,7 +100,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         scope.launch { sheetText = Buddy.explain(line) }
     }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
-    val lines = rememberLyrics(now?.songId)
+    val lines = rememberLyrics(now?.nid)
     val pos = rememberPosition(now)
     val idx by remember(lines) { derivedStateOf { lines?.let { idxAt(it, pos.value) } ?: -1 } }
     val bands = Spectrum.bands.collectAsState()
@@ -181,7 +181,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         }
         Progress(now, mood.accent)
         Spacer(Modifier.height(10.dp))
-        Controls(now, mood.accent) { Ncm.openApp(ctx) }
+        Controls(now, mood.accent) { Players.openApp(ctx, now.pkg) }
     }
     sheetLine?.let { line ->
         Box(
@@ -219,9 +219,9 @@ private fun TopBar(now: Now?) {
         )
         Text("微光", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, modifier = Modifier.padding(start = 10.dp))
         val status = when {
-            now == null -> "等待网易云"
-            now.playing -> "网易云 · 在听"
-            else -> "网易云 · 暂停"
+            now == null -> "等待音乐 App"
+            now.playing -> "${Players.nameOf(now.pkg)} · 在听"
+            else -> "${Players.nameOf(now.pkg)} · 暂停"
         }
         Row(Modifier.padding(start = 10.dp).glass(999.dp, 2.dp).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(if (now?.playing == true) Wg.ok else Wg.ink3))
@@ -329,7 +329,7 @@ private fun Controls(now: Now, accent: Color, onOpen: () -> Unit) {
             Modifier.clip(RoundedCornerShape(999.dp)).clickable(onClick = onOpen).padding(horizontal = 6.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("网易云", fontSize = 12.sp, color = Wg.ink2)
+            Text(Players.nameOf(now.pkg), fontSize = 12.sp, color = Wg.ink2)
         }
     }
 }
@@ -337,28 +337,29 @@ private fun Controls(now: Now, accent: Color, onOpen: () -> Unit) {
 @Composable
 private fun EmptyNow(time: State<Float>) {
     val ctx = LocalContext.current
-    val installed = remember { Ncm.version(ctx) != null }
+    val installed = remember { Players.target(ctx) != null }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         ParticleOrb(Modifier.fillMaxWidth().height(300.dp), time, { 0.2f })
-        Text(if (installed) "网易云还没在放歌" else "还没装网易云", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+        Text(if (installed) "音乐 App 还没在放歌" else "还没装音乐 App", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
         Text(
-            if (installed) "放一首，微光就在这儿陪你听" else "微光陪你听网易云的歌，先装一个吧",
-            fontSize = 14.sp, color = Wg.ink2, modifier = Modifier.padding(top = 8.dp),
+            if (installed) "在网易云、QQ音乐、酷狗、酷我或汽水里放一首，微光就在这儿陪你听" else "网易云、QQ音乐、酷狗、酷我、汽水都行，先装一个吧",
+            fontSize = 14.sp, color = Wg.ink2, textAlign = TextAlign.Center, lineHeight = 21.sp,
+            modifier = Modifier.padding(top = 8.dp, start = 12.dp, end = 12.dp),
         )
         Spacer(Modifier.height(26.dp))
         Box(
             Modifier.shadow(14.dp, RoundedCornerShape(999.dp), spotColor = Wg.warm).clip(RoundedCornerShape(999.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFFF6AB86), Wg.warm)))
-                .clickable { if (installed) Ncm.openApp(ctx) else Ncm.openStore(ctx) }
+                .clickable { if (installed) Players.openApp(ctx) else Players.openStore(ctx) }
                 .padding(horizontal = 28.dp, vertical = 13.dp),
         ) {
-            Text(if (installed) "打开网易云" else "去下载", color = Color.White, fontSize = 15.sp)
+            Text(if (installed) "打开${Players.nameOf(Players.target(ctx))}" else "去下载", color = Color.White, fontSize = 15.sp)
         }
         Spacer(Modifier.width(1.dp).height(60.dp))
     }
 }
 
-// 整首歌词走网易云网页接口；拿不到（断网）隔几秒再试两次，还不行就只显示会话里报的当前这句
+// 整首歌词走网易云网页接口（别的 App 的歌先对上网易云 ID）；拿不到（断网）隔几秒再试两次，还不行就只显示会话里报的当前这句
 @Composable
 private fun rememberLyrics(id: Long?): List<LrcLine>? = produceState<List<LrcLine>?>(null, id) {
     value = null

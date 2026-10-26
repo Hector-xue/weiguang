@@ -7,6 +7,9 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+// 在网易云曲库里对上的那首：id=0 表示查过没对上
+data class Hit(val id: Long, val pic: String)
+
 // 一句歌词：t=开始时间（毫秒），tr=翻译（没有就是 null）
 data class LrcLine(val t: Long, val text: String, val tr: String? = null)
 
@@ -86,6 +89,41 @@ object Cloud {
                 if (pic.startsWith("http")) m[s.getLong("id")] = pic.replace("http://", "https://")
             }
             m
+        } catch (_: Throwable) { null }
+    }
+
+    // 别的 App 在放的歌，去网易云曲库里对一下，拿到 ID 才有整首歌词和封面。
+    // 歌名得对上；歌手或时长再对上一样才算（翻唱、同名歌很多）。null=网络问题，下次再试
+    suspend fun match(title: String, artist: String, durMs: Long = 0): Hit? {
+        val t = Library.norm(title)
+        if (t.isEmpty()) return Hit(0, "")
+        val q = (title + " " + artist.split("/", "、", "&", ",").first()).trim()
+        val raw = withContext(Dispatchers.IO) {
+            get("https://music.163.com/api/cloudsearch/pc?type=1&limit=10&offset=0&s=" + java.net.URLEncoder.encode(q, "UTF-8"))
+        } ?: return null
+        return try {
+            val a = JSONObject(raw).optJSONObject("result")?.optJSONArray("songs") ?: return Hit(0, "")
+            val wantAr = artist.split("/", "、", "&", ",").map { Library.norm(it) }.filter { it.isNotEmpty() }.toSet()
+            var best: Hit? = null
+            var bestScore = 0
+            for (i in 0 until a.length()) {
+                val s = a.getJSONObject(i)
+                val name = Library.norm(s.optString("name"))
+                val titleOk = name == t || (name.startsWith(t) && name.length - t.length <= 6)
+                if (!titleOk) continue
+                val ars = s.optJSONArray("ar")
+                val arOk = ars != null && (0 until ars.length()).any { j -> Library.norm(ars.getJSONObject(j).optString("name")) in wantAr }
+                val dt = s.optLong("dt")
+                val durOk = durMs > 0 && dt > 0 && kotlin.math.abs(dt - durMs) < 4000
+                if (!arOk && !durOk) continue
+                val score = (if (name == t) 4 else 1) + (if (arOk) 3 else 0) + (if (durOk) 2 else 0)
+                if (score > bestScore) {
+                    bestScore = score
+                    val pic = s.optJSONObject("al")?.optString("picUrl").orEmpty().replace("http://", "https://")
+                    best = Hit(s.getLong("id"), if (pic.startsWith("http")) pic else "")
+                }
+            }
+            best ?: Hit(0, "")
         } catch (_: Throwable) { null }
     }
 }

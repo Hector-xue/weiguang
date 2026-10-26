@@ -68,7 +68,7 @@ import com.ivyea.weiguang.core.Song
 import com.ivyea.weiguang.core.rememberArt
 import com.ivyea.weiguang.core.Library
 import com.ivyea.weiguang.core.Msg
-import com.ivyea.weiguang.core.Ncm
+import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
 import com.ivyea.weiguang.core.Spectrum
@@ -84,6 +84,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     val msgs by Buddy.msgs.collectAsState()
     val busy by Buddy.busy.collectAsState()
     val thought by Buddy.thought.collectAsState()
+    val radio by Buddy.radio.collectAsState()
     val bands = Spectrum.bands.collectAsState()
     var input by rememberSaveable { mutableStateOf("") }
     val list = rememberLazyListState()
@@ -98,6 +99,16 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
             Box(Modifier.padding(start = 8.dp).size(6.dp).clip(CircleShape).background(if (now?.playing == true) Wg.ok else Wg.ink3))
             Text(if (busy) "在想…" else if (now?.playing == true) "在听你" else "在这儿", fontSize = 13.sp, color = Wg.ink2, modifier = Modifier.padding(start = 6.dp))
             Spacer(Modifier.weight(1f))
+            radio?.let { f ->
+                Row(
+                    Modifier.padding(end = 4.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.7f))
+                        .clickable { Buddy.stopQueue() }.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(feelColor(f.v, f.e)))
+                    Text("${f.name}电台 · 停", fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 6.dp))
+                }
+            }
             if (msgs.isNotEmpty()) Text("清空", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.clickable { Buddy.clearChat() }.padding(6.dp))
         }
 
@@ -222,7 +233,7 @@ private fun Bubble(m: Msg, accent: Color) {
                 m.songs.forEach { id ->
                     val s = songs[id] ?: return@forEach
                     Row(
-                        Modifier.fillMaxWidth().clickable { Ncm.playSong(ctx, id) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                        Modifier.fillMaxWidth().clickable { Players.play(ctx, s) }.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Thumb(s, 30)
@@ -230,15 +241,29 @@ private fun Bubble(m: Msg, accent: Color) {
                         if (s.artist.isNotEmpty()) Text(" · ${s.artist}", fontSize = 12.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
+                val q by Buddy.queue.collectAsState()
+                val radio by Buddy.radio.collectAsState()
                 if (m.songs.size >= 3) {
-                    val q by Buddy.queue.collectAsState()
-                    val on = q == m.songs
+                    val on = q == m.songs && radio == null
                     Row(
                         Modifier.fillMaxWidth().clickable { if (on) Buddy.stopQueue() else Buddy.startQueue(ctx, m.songs) }.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Glyph(if (on) G.Pause else G.Play, accent, Modifier.size(13.dp))
                         Text(if (on) "正在按顺序播放 · 点一下停止" else "按顺序播放这 ${m.songs.size} 首", fontSize = 13.sp, color = accent, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 10.dp))
+                    }
+                }
+                Feels.firstOrNull { it.name == m.feel }?.let { f ->
+                    val on = radio == f && q.take(m.songs.size) == m.songs
+                    Row(
+                        Modifier.fillMaxWidth().clickable { if (on) Buddy.stopQueue() else Buddy.startRadio(ctx, f, m.songs) }.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(9.dp).clip(CircleShape).background(feelColor(f.v, f.e)))
+                        Text(
+                            if (on) "${f.name}电台放着呢 · 点一下停止" else "一直放下去 · ${f.name}电台",
+                            fontSize = 13.sp, color = accent, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 10.dp),
+                        )
                     }
                 }
             }
@@ -306,7 +331,7 @@ private fun Habit(accent: Color) {
         Text("这个点你常听", fontSize = 13.sp, color = Wg.ink2, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             songs.forEach { s ->
-                Column(Modifier.size(width = 92.dp, height = 128.dp).clip(RoundedCornerShape(16.dp)).clickable { Ncm.playSong(ctx, s.id) }) {
+                Column(Modifier.size(width = 92.dp, height = 128.dp).clip(RoundedCornerShape(16.dp)).clickable { Players.play(ctx, s) }) {
                     Thumb(s, 92)
                     Text(s.title, fontSize = 12.5.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
                     Text(s.artist, fontSize = 11.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))

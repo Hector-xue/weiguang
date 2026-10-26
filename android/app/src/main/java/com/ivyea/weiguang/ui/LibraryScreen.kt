@@ -1,6 +1,5 @@
 package com.ivyea.weiguang.ui
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -62,6 +61,8 @@ import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.core.LibState
 import com.ivyea.weiguang.core.Library
 import com.ivyea.weiguang.core.Ncm
+import com.ivyea.weiguang.core.Players
+import com.ivyea.weiguang.core.Buddy
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.Playlist
 import com.ivyea.weiguang.core.Song
@@ -102,7 +103,7 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
     BackHandler(enabled = openPl != null || q.isNotEmpty()) { if (q.isNotEmpty()) q = "" else openPl = null }
 
     val sync: () -> Unit = { scope.launch { Library.sync(ctx) } }
-    val play: (Song) -> Unit = { s -> if (!Ncm.playSong(ctx, s.id)) Toast.makeText(ctx, "打不开网易云", Toast.LENGTH_SHORT).show() }
+    val play: (Song) -> Unit = { s -> Players.play(ctx, s) }
     val hits = remember(q, lib.songs) {
         val k = q.trim()
         if (k.isEmpty()) emptyList()
@@ -118,7 +119,11 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
     ) {
         if (pl != null) {
-            item { PlaylistHeader(pl, plSongs.size, accent, { openPl = null }) { Ncm.openPlaylist(ctx, pl.id) } }
+            item {
+                PlaylistHeader(pl, plSongs.size, accent, { openPl = null }, { Buddy.startQueue(ctx, plSongs.take(100).map { it.id }) }) {
+                    if (pl.src == Ncm.PKG) Ncm.openPlaylist(ctx, pl.id) else Players.openApp(ctx, pl.src)
+                }
+            }
             items(plSongs, key = { "p${it.id}" }) { SongRow(it, now, accent, null) { play(it) } }
             return@LazyColumn
         }
@@ -151,12 +156,12 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
             item {
                 Row(
                     Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(14.dp))
-                        .clickable { Ncm.search(ctx, q.trim()) }.padding(horizontal = 10.dp, vertical = 14.dp),
+                        .clickable { Players.search(ctx, q.trim()) }.padding(horizontal = 10.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Filled.Search, null, tint = accent, modifier = Modifier.size(18.dp))
                     Text(
-                        if (hits.isEmpty()) "曲库里没有，去网易云搜「${q.trim()}」" else "去网易云搜「${q.trim()}」",
+                        Players.nameOf(Players.target(ctx)).let { app -> if (hits.isEmpty()) "曲库里没有，去${app}搜「${q.trim()}」" else "去${app}搜「${q.trim()}」" },
                         fontSize = 14.sp, color = accent, modifier = Modifier.padding(start = 10.dp),
                     )
                 }
@@ -165,7 +170,9 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
         }
 
         item { Tabs(tab, accent) { tab = it } }
-        if (tab == 2) {
+        if (tab == 3) {
+            item { DiaryView(lib, accent) }
+        } else if (tab == 2) {
             item { StarMap(lib, now, accent, time) }
         } else if (tab == 0) {
             if (lib.playlists.isEmpty()) item { Quiet("还没有歌单，点右上角同步") }
@@ -176,7 +183,7 @@ fun LibraryScreen(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
                 }
             }
         } else {
-            if (history.isEmpty()) item { Quiet("在网易云里听过的歌，会自动记在这里") }
+            if (history.isEmpty()) item { Quiet("在音乐 App 里听过的歌，会自动记在这里") }
             else items(history, key = { "r${it.first.id}" }) { (s, h) ->
                 SongRow(s, now, accent, "${h.count} 次 · ${ago(h.at)}") { play(s) }
             }
@@ -189,11 +196,11 @@ private fun EmptyLibrary(lib: LibState, time: State<Float>, onSync: () -> Unit) 
     Column(Modifier.fillMaxWidth().padding(top = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         ParticleOrb(Modifier.fillMaxWidth().height(220.dp), time, { if (lib.syncing) 0.9f else 0.2f })
         Text(
-            if (lib.syncing) "正在读取你的歌单" else "把网易云的歌单带过来",
+            if (lib.syncing) "正在读取你的歌单" else "把音乐 App 的歌单带过来",
             fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink,
         )
         Text(
-            if (lib.syncing) lib.syncMsg else "读取歌单和播放历史，只存在这台手机里",
+            if (lib.syncing) lib.syncMsg else "网易云能读到歌单；别的 App 能读多少看它开放多少。听过的歌都会记下来，只存在这台手机里",
             fontSize = 13.sp, color = Wg.ink2, textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp, start = 16.dp, end = 16.dp),
         )
@@ -266,7 +273,7 @@ private fun SearchBox(q: String, onChange: (String) -> Unit) {
 @Composable
 private fun Tabs(tab: Int, accent: Color, onTab: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 14.dp)) {
-        listOf("歌单", "听过", "星图").forEachIndexed { i, label ->
+        listOf("歌单", "听过", "星图", "日记").forEachIndexed { i, label ->
             val sel = i == tab
             Column(
                 Modifier.padding(end = 26.dp).clickable { onTab(i) },
@@ -307,22 +314,30 @@ private fun PlaylistCard(p: Playlist, modifier: Modifier, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () -> Unit, onPlayAll: () -> Unit) {
+private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () -> Unit, onQueue: () -> Unit, onOpen: () -> Unit) {
+    val ncm = p.src == Ncm.PKG
     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Text("‹ 曲库", fontSize = 14.sp, color = Wg.ink2, modifier = Modifier.clickable(onClick = onBack).padding(vertical = 6.dp))
         Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             PlaylistArt(p, Modifier.size(96.dp).shadow(16.dp, RoundedCornerShape(20.dp), spotColor = accent), 20, false)
             Column(Modifier.padding(start = 14.dp)) {
                 Text(p.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("$count 首", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(top = 4.dp))
+                Text("$count 首 · ${Players.nameOf(p.src)}", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(top = 4.dp))
             }
         }
-        Text(
-            "在网易云打开这个歌单", fontSize = 13.sp, color = Color.White,
-            modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(999.dp)).background(accent)
-                .clickable(onClick = onPlayAll).padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        if (count in 1..12) {
+        Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "按顺序播放", fontSize = 13.sp, color = Color.White,
+                modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(accent)
+                    .clickable(onClick = onQueue).padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            Text(
+                if (ncm) "在网易云打开" else "打开${Players.nameOf(p.src)}", fontSize = 13.sp, color = Wg.ink2,
+                modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.7f))
+                    .clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        if (ncm && count in 1..12) {
             Text(
                 "网易云只给微光看前几首。在网易云里点「播放全部」一次，微光就能从播放队列补全整个歌单。",
                 fontSize = 12.sp, color = Wg.ink3, lineHeight = 18.sp, modifier = Modifier.padding(top = 10.dp),
@@ -351,7 +366,7 @@ private fun SongRow(s: Song, now: Now?, accent: Color, extra: String?, onClick: 
                 s.title, fontSize = 15.sp, color = if (playing) accent else Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontWeight = if (playing) FontWeight.SemiBold else FontWeight.Normal,
             )
-            val sub = listOfNotNull(s.artist.takeIf { it.isNotEmpty() }, extra).joinToString(" · ")
+            val sub = listOfNotNull(s.artist.takeIf { it.isNotEmpty() }, s.src?.let { Players.nameOf(it) }, extra).joinToString(" · ")
             if (sub.isNotEmpty()) Text(sub, fontSize = 12.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
         if (playing) Box(Modifier.size(7.dp).clip(CircleShape).background(accent))

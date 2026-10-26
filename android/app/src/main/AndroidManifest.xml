@@ -6,11 +6,21 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- 悬浮光球；有了它点歌后才能自己跳回微光 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- 只连你在设置里填的 AI 服务 -->
+    <!-- 联网：你填的 AI 服务、网易云公开接口（歌词封面）、天气 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 「参考天气」打开后才申请：只取系统缓存的大致位置 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <queries>
         <package android:name="com.netease.cloudmusic" />
+        <package android:name="com.tencent.qqmusic" />
+        <package android:name="com.kugou.android" />
+        <package android:name="com.kugou.android.lite" />
+        <package android:name="cn.kuwo.player" />
+        <package android:name="com.luna.music" />
+        <intent>
+            <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="orpheus" />
@@ -39,7 +49,20 @@
             </intent-filter>
         </activity>
 
-        <!-- 通知使用权：有了它才能读网易云的播放会话；悬浮光球也挂在它身上（系统常驻绑定，不用前台通知） -->
+        <!-- 桌面小组件 -->
+        <receiver
+            android:name=".service.NowWidget"
+            android:exported="false"
+            android:label="微光">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_now" />
+        </receiver>
+
+        <!-- 通知使用权：有了它才能读音乐 App 的播放会话；悬浮光球也挂在它身上（系统常驻绑定，不用前台通知） -->
         <service
             android:name=".service.NowListener"
             android:exported="true"

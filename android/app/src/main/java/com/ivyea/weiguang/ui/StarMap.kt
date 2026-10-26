@@ -45,7 +45,8 @@ import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.core.Ai
 import com.ivyea.weiguang.core.Buddy
 import com.ivyea.weiguang.core.LibState
-import com.ivyea.weiguang.core.Ncm
+import com.ivyea.weiguang.core.Library
+import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.Song
 import kotlinx.coroutines.launch
@@ -68,7 +69,9 @@ fun StarMap(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
     val tagMsg by Buddy.tagMsg.collectAsState()
     val queue by Buddy.queue.collectAsState()
     val qIdx by Buddy.qIdx.collectAsState()
-    val stars = remember(lib.songs) { lib.songs.values.filter { it.v != null && it.e != null } }
+    // 纵轴用合并后的能量（AI 估的 + 开着微光听时实测的）
+    val stars = remember(lib.songs) { lib.songs.values.filter { it.v != null && it.e != null }.map { it.copy(e = Library.energy(it)) } }
+    val measured = remember(lib.songs) { Library.measuredCount() }
     val untagged = remember(lib.songs) { lib.songs.values.count { it.v == null && it.title.isNotEmpty() } }
     val path = remember { mutableStateListOf<Offset>() }
     var picked by remember { mutableStateOf<List<Song>>(emptyList()) }
@@ -168,13 +171,14 @@ fun StarMap(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
                 Text("明亮 →", fontSize = 11.sp, color = Wg.ink3, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp))
             }
             Text(
-                "点星星放这首；手指画一条线，生成一张歌单。共 ${stars.size} 颗",
+                "点星星放这首；手指画一条线，生成一张歌单。共 ${stars.size} 颗" +
+                    if (measured >= 8) "，$measured 首按实际听感校正过能量" else "",
                 fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 8.dp, start = 4.dp),
             )
         }
 
         tapped?.let { s ->
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp).glass(18.dp, 2.dp).clickable { Ncm.playSong(ctx, s.id) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp).glass(18.dp, 2.dp).clickable { Players.play(ctx, s) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(starColor(s)))
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                     Text(s.title, fontSize = 15.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -202,7 +206,7 @@ fun StarMap(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
                 }
                 picked.forEachIndexed { i, s ->
                     val cur = playing && i == qIdx
-                    Row(Modifier.fillMaxWidth().clickable { Ncm.playSong(ctx, s.id) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable { Players.play(ctx, s) }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("${i + 1}", fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.size(22.dp))
                         Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(starColor(s)))
                         Text(
@@ -213,7 +217,7 @@ fun StarMap(lib: LibState, now: Now?, accent: Color, time: State<Float>) {
                     }
                 }
                 Text(
-                    "网易云每播完一首，微光会接着放线上的下一首（会切到网易云）",
+                    "音乐 App 每播完一首，微光会接着放线上的下一首",
                     fontSize = 11.5.sp, color = Wg.ink3, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                 )
             }

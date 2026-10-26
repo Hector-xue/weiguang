@@ -55,9 +55,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.core.Ai
 import com.ivyea.weiguang.core.Library
+import com.ivyea.weiguang.core.Buddy
 import com.ivyea.weiguang.core.Ncm
+import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Prefs
 import com.ivyea.weiguang.core.Spectrum
+import com.ivyea.weiguang.core.Weather
 import com.ivyea.weiguang.service.NowListener
 
 @Composable
@@ -69,13 +72,17 @@ fun SettingsPage() {
     val granted = remember(tick, spectrum) { Spectrum.granted(ctx) }
     val canOverlay = remember(tick) { Settings.canDrawOverlays(ctx) }
     val listenerOn = remember(tick) { listenerEnabled(ctx) }
-    val ncm = remember(tick) { Ncm.version(ctx) }
+    var weather by remember { mutableStateOf(Prefs.weather) }
+    val located = remember(tick, weather) { Weather.granted(ctx) }
     val lib by Library.state.collectAsState()
     var showLog by remember { mutableStateOf(false) }
     val version = remember { try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (_: Throwable) { "?" } }
 
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) { Prefs.spectrum = true; spectrum = true; Spectrum.start(ctx) }
+    }
+    val askLoc = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) { Prefs.weather = true; weather = true }
     }
     // 从「显示在其他应用上层」设置页回来时，权限到手就把光球挂上
     LaunchedEffect(canOverlay, orb) { NowListener.instance?.syncOrb() }
@@ -109,7 +116,20 @@ fun SettingsPage() {
                 }
                 NowListener.instance?.syncOrb()
             }
+            Line()
+            SwitchRow(
+                "参考天气",
+                if (located) "下雨、天晴时挑歌不一样；只用大致位置（约 10 公里）" else "需要大致位置权限；只用来查天气",
+                weather && located,
+            ) { on ->
+                if (!on) { Prefs.weather = false; weather = false }
+                else if (located) { Prefs.weather = true; weather = true }
+                else askLoc.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            }
         }
+
+        Spacer(Modifier.height(16.dp))
+        AppsSection(tick)
 
         Spacer(Modifier.height(16.dp))
         AiSection()
@@ -119,8 +139,6 @@ fun SettingsPage() {
             InfoRow("通知使用权", if (listenerOn) "已开启" else "去开启", listenerOn) {
                 ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            Line()
-            InfoRow("网易云", ncm?.let { "v$it" } ?: "没装", ncm != null) { if (ncm == null) Ncm.openStore(ctx) else Ncm.openApp(ctx) }
             if (lib.syncLog.isNotEmpty()) {
                 Line()
                 InfoRow("上次同步明细", if (showLog) "收起" else "展开", true) { showLog = !showLog }
@@ -141,7 +159,7 @@ fun SettingsPage() {
             }
         }
         Text(
-            "微光只读取网易云的播放信息和你的歌单，存在这台手机里。歌词和封面按歌曲 ID 向网易云公开接口查询，不带账号。用 AI 时，只把歌名、歌手和你说的话发给你填的 AI 服务。",
+            "微光只读取音乐 App 的播放信息和它们开放的歌单，存在这台手机里。歌词和封面按歌曲 ID 或歌名向网易云公开接口查询，不带账号。打开「参考天气」后，把约 10 公里精度的位置发给 Open-Meteo 查天气。用 AI 时，只把歌名、歌手和你说的话发给你填的 AI 服务。",
             fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 18.dp, start = 4.dp),
         )
     }
@@ -202,6 +220,22 @@ private fun AiSection() {
             }
         }
         Field("密钥", key, "sk-…", secret = true) { key = it; Prefs.aiKey = it; result = "" }
+        var persona by remember { mutableStateOf(Prefs.persona) }
+        Text("性格", fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 18.dp, top = 12.dp))
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Buddy.personas.forEachIndexed { i, (name, _) ->
+                val sel = persona == i
+                Text(
+                    name, fontSize = 13.sp, color = if (sel) Color.White else Wg.ink2,
+                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(if (sel) Wg.lav else Color.White.copy(alpha = 0.6f))
+                        .clickable { persona = i; Prefs.persona = i }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
         Text(
             if (more) "收起" else "地址和模型", fontSize = 12.sp, color = Wg.lav,
             modifier = Modifier.padding(start = 18.dp, top = 8.dp).clickable { more = !more },
@@ -245,6 +279,61 @@ private fun Field(label: String, value: String, hint: String, secret: Boolean = 
                 visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+}
+
+// 音乐 App：装了哪些、点歌用哪个；每个 App 点歌接住过的方式也摆出来，方便排查
+@Composable
+private fun AppsSection(tick: Int) {
+    val ctx = LocalContext.current
+    val apps = remember(tick) { Players.installed(ctx) }
+    var pick by remember { mutableStateOf(Prefs.player) }
+    Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp).padding(vertical = 14.dp)) {
+        Text("音乐 App", fontSize = 15.sp, color = Wg.ink, modifier = Modifier.padding(horizontal = 18.dp))
+        Text(
+            "网易云能读歌单、按歌点播；QQ音乐、酷狗、酷我、汽水能读播放和控制，点歌靠系统通道，接不住就打开它并复制好歌名",
+            fontSize = 12.sp, color = Wg.ink2, lineHeight = 18.sp, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 3.dp),
+        )
+        if (apps.isEmpty()) {
+            Text("一个都没装", fontSize = 13.sp, color = Wg.warm, modifier = Modifier.padding(start = 18.dp, top = 12.dp))
+            return@Column
+        }
+        Text("点歌用", fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 18.dp, top = 12.dp))
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            (listOf("" to "自动") + apps.map { it.pkg to it.name }).forEach { (pkg, name) ->
+                val sel = pick == pkg
+                Text(
+                    name, fontSize = 13.sp, color = if (sel) Color.White else Wg.ink2,
+                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(if (sel) Wg.warm else Color.White.copy(alpha = 0.6f))
+                        .clickable { pick = pkg; Prefs.player = pkg }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+        if (pick.isEmpty()) Text("自动：正在放的那个，没在放就用上次放过的", fontSize = 11.5.sp, color = Wg.ink3, modifier = Modifier.padding(start = 18.dp))
+        apps.forEach { a ->
+            Line()
+            val how = remember(tick) { Prefs.how(a.pkg) }
+            val v = remember(tick) { Players.version(ctx, a.pkg) }
+            Row(Modifier.fillMaxWidth().clickable { Players.openApp(ctx, a.pkg) }.padding(horizontal = 18.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(a.name, fontSize = 14.5.sp, color = Wg.ink)
+                    Text(
+                        when {
+                            a.pkg == Ncm.PKG -> "按歌曲 ID 点播"
+                            how == "none" -> "上次点歌没接住，只能打开它搜"
+                            how.isNotEmpty() -> "点歌方式：${Players.methods[how] ?: how}"
+                            else -> "还没点过歌"
+                        },
+                        fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                Text("v$v", fontSize = 12.sp, color = Wg.ink3)
+            }
         }
     }
 }

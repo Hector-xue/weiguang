@@ -40,4 +40,27 @@ object Prefs {
     var orbY: Int
         get() = sp?.getInt("orbY", -1) ?: -1
         set(v) { sp?.edit()?.putInt("orbY", v)?.apply() }
+
+    // 点歌用哪个 App；空=自动（正在放的 / 上次放的）
+    var player: String
+        get() = sp?.getString("player", "") ?: ""
+        set(v) { sp?.edit()?.putString("player", v)?.apply() }
+
+    var lastPlayer: String
+        get() = sp?.getString("lastPlayer", "") ?: ""
+        set(v) { if (v != lastPlayer) sp?.edit()?.putString("lastPlayer", v)?.apply() }
+
+    // 每个 App 上次接住点歌的方式（session / mid / intent / none）
+    fun how(pkg: String): String = sp?.getString("how:$pkg", "") ?: ""
+    fun setHow(pkg: String, m: String) { sp?.edit()?.putString("how:$pkg", m)?.apply() }
+
+    // AI 伙伴的性格，见 Buddy.personas
+    var persona: Int
+        get() = sp?.getInt("persona", 0) ?: 0
+        set(v) { sp?.edit()?.putInt("persona", v)?.apply() }
+
+    // 参考天气（要大致位置权限）；默认关
+    var weather: Boolean
+        get() = sp?.getBoolean("weather", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("weather", v)?.apply() }
 }

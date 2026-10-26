@@ -14,6 +14,11 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import com.ivyea.weiguang.service.NowListener
+import com.ivyea.weiguang.service.NowWidget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -28,7 +33,9 @@ data class Now(
     val updatedAt: Long,
     val speed: Float,
     val playing: Boolean,
+    // 曲库里的 ID（网易云=歌曲 ID；别的 App=本机算的负数 ID）；nid=对上的网易云 ID，拿整首歌词用
     val songId: Long?,
+    val nid: Long?,
     val lyric: String?,
     val likeIcon: Bitmap?,
     val hasLike: Boolean,
@@ -41,7 +48,7 @@ data class Now(
     }
 }
 
-// 读别的 App 的播放会话（优先网易云）。要通知使用权，否则一切为空
+// 读音乐 App 的播放会话（网易云、QQ音乐、酷狗、酷我、汽水…）。要通知使用权，否则一切为空
 object NowPlaying {
     private val _now = MutableStateFlow<Now?>(null)
     val now: StateFlow<Now?> = _now
@@ -50,9 +57,15 @@ object NowPlaying {
     private var app: Context? = null
     private var msm: MediaSessionManager? = null
     private var ctrl: MediaController? = null
+    private var all: List<MediaController> = emptyList()
     private val icons = HashMap<String, Bitmap?>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val resolving = HashSet<Long>()
 
     private val sessions = MediaSessionManager.OnActiveSessionsChangedListener { list -> pick(list ?: emptyList()) }
+
+    // 别的会话开始播放时也要重新挑（比如从网易云换到 QQ音乐）
+    private val watchers = HashMap<MediaSession.Token, MediaController.Callback>()
 
     private val cb = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) = emit()
@@ -87,9 +100,33 @@ object NowPlaying {
 
     private fun comp(c: Context) = ComponentName(c, NowListener::class.java)
 
+    fun controllerOf(pkg: String): MediaController? = all.firstOrNull { it.packageName == pkg }
+
+    private fun watch(list: List<MediaController>) {
+        val live = list.map { it.sessionToken }.toSet()
+        watchers.keys.filter { it !in live }.forEach { watchers.remove(it) }
+        for (c in list) {
+            if (c.sessionToken in watchers) continue
+            val w = object : MediaController.Callback() {
+                override fun onPlaybackStateChanged(state: PlaybackState?) {
+                    if (state?.state == PlaybackState.STATE_PLAYING && c.sessionToken != ctrl?.sessionToken) pick(all)
+                }
+            }
+            try { c.registerCallback(w, main); watchers[c.sessionToken] = w } catch (_: Throwable) {}
+        }
+    }
+
+    // 正在放的音乐 App > 刚才跟着的那个 > 上次放过的 > 任何音乐 App > 任何在放的
     private fun pick(list: List<MediaController>) {
-        val best = list.firstOrNull { it.packageName == Ncm.PKG }
-            ?: list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+        all = list
+        watch(list)
+        fun playing(c: MediaController) = c.playbackState?.state == PlaybackState.STATE_PLAYING
+        val music = list.filter { Players.isKnown(it.packageName) }
+        val best = music.firstOrNull { playing(it) }
+            ?: music.firstOrNull { it.sessionToken == ctrl?.sessionToken }
+            ?: music.firstOrNull { it.packageName == Prefs.lastPlayer }
+            ?: music.firstOrNull()
+            ?: list.firstOrNull { playing(it) }
         if (best?.sessionToken != ctrl?.sessionToken) {
             ctrl?.unregisterCallback(cb)
             ctrl = best
@@ -102,16 +139,25 @@ object NowPlaying {
     private fun absorb() {
         val c = ctrl ?: return
         val q = c.queue ?: return
+        val pkg = c.packageName
+        if (!Players.isKnown(pkg)) return
         val items = q.mapNotNull { qi ->
             val d = qi.description
-            val id = Ncm.songIdOf(d.mediaId) ?: return@mapNotNull null
-            Triple(id, d.title?.toString() ?: "", d.subtitle?.toString() ?: "")
+            val t = d.title?.toString()?.trim() ?: ""
+            val a = d.subtitle?.toString()?.trim() ?: ""
+            val id = Library.idOf(pkg, d.mediaId, t, a) ?: return@mapNotNull null
+            Triple(id, t, a)
         }
-        Library.absorbQueue(c.queueTitle?.toString(), items)
+        Library.absorbQueue(c.queueTitle?.toString(), items, pkg.takeIf { it != Ncm.PKG })
     }
 
-    private fun likeAction(c: MediaController) = c.playbackState?.customActions?.firstOrNull {
-        it.name.toString() == "like" || it.action.endsWith(".STAR")
+    // 网易云的红心叫 like / *.STAR；别家按名字猜（不碰「收藏到歌单」）
+    private val likeWords = Regex("like|love|favou?rite|heart|喜欢|红心", RegexOption.IGNORE_CASE)
+
+    private fun likeAction(c: MediaController): PlaybackState.CustomAction? {
+        val acts = c.playbackState?.customActions ?: return null
+        return acts.firstOrNull { it.name.toString() == "like" || it.action.endsWith(".STAR") }
+            ?: acts.firstOrNull { (likeWords.containsMatchIn(it.name) || likeWords.containsMatchIn(it.action)) && !it.name.contains("收藏") }
     }
 
     private fun emit() {
@@ -120,28 +166,57 @@ object NowPlaying {
         val st = c?.playbackState
         if (c == null || (m == null && st == null)) { _now.value = null; return }
         val like = likeAction(c)
+        val title = m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
+        val artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+        val dur = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val music = Players.isKnown(c.packageName)
+        val songId = if (music) Library.idOf(c.packageName, m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID), title, artist) else null
+        val nid = when {
+            songId == null -> null
+            songId > 0 -> songId
+            else -> Library.state.value.songs[songId]?.nid?.takeIf { it > 0 }
+        }
         val updated = st?.lastPositionUpdateTime?.takeIf { it > 0 } ?: SystemClock.elapsedRealtime()
         val n = Now(
             pkg = c.packageName,
-            title = m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "",
-            artist = m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "",
+            title = title,
+            artist = artist,
             album = m?.getString(MediaMetadata.METADATA_KEY_ALBUM) ?: "",
             art = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART),
-            durationMs = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L,
+            durationMs = dur,
             positionMs = st?.position ?: 0L,
             updatedAt = updated,
             speed = st?.playbackSpeed?.takeIf { it > 0f } ?: 1f,
             playing = st?.state == PlaybackState.STATE_PLAYING,
-            songId = Ncm.songIdOf(m?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)),
+            songId = songId,
+            nid = nid,
             lyric = m?.getString("ucar.media.metadata.LYRICS_LINE")?.trim()?.takeIf { it.isNotEmpty() },
             likeIcon = like?.let { icon(c.packageName, it.icon) },
             hasLike = like != null,
         )
+        val prev = _now.value
         _now.value = n
-        if (n.songId != null && n.title.isNotEmpty()) Library.recordPlay(n.songId, n.title, n.artist)
+        if (n.songId != null && n.title.isNotEmpty()) {
+            Library.recordPlay(n.songId, n.title, n.artist, n.pkg)
+            if (n.playing) Prefs.lastPlayer = n.pkg
+            if (n.nid == null) resolve(n.songId, n.title, n.artist, n.durationMs)
+        }
+        app?.let { if (prev?.title != n.title || prev.playing != n.playing || prev.art !== n.art || prev.pkg != n.pkg) NowWidget.refresh(it) }
     }
 
-    // 红心图标直接画网易云自己的（喜欢/没喜欢是两张图），不用猜状态
+    // 别的 App 在放的歌：去网易云对上 ID，拿到后重新发一遍（播放页就能显示整首歌词）
+    private fun resolve(id: Long, title: String, artist: String, dur: Long) {
+        if (id > 0 || !resolving.add(id)) return
+        if (Library.state.value.songs[id]?.nid == 0L) return
+        scope.launch {
+            val hit = Cloud.match(title, artist, dur)
+            if (hit == null) { resolving.remove(id); return@launch }
+            Library.setMatch(id, hit)
+            if (hit.id > 0) emit()
+        }
+    }
+
+    // 红心图标直接画那个 App 自己的（喜欢/没喜欢是两张图），不用猜状态
     private fun icon(pkg: String, id: Int): Bitmap? = icons.getOrPut("$pkg:$id") {
         try {
             val d = app!!.packageManager.getResourcesForApplication(pkg).getDrawable(id, null)

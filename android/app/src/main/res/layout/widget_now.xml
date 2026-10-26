@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/w_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <ImageView
+        android:id="@+id/w_art"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:background="@drawable/w_art_bg"
+        android:clipToOutline="true"
+        android:scaleType="centerCrop"
+        android:src="@drawable/logo_mark" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="6dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/w_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="微光"
+            android:textColor="#34324D"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/w_sub"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="放首歌，我陪你听"
+            android:textColor="#75738F"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/w_thought"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#8F86E0"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/w_prev"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:contentDescription="上一首"
+        android:padding="8dp"
+        android:src="@drawable/w_prev" />
+
+    <ImageView
+        android:id="@+id/w_toggle"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_marginStart="2dp"
+        android:layout_marginEnd="2dp"
+        android:background="@drawable/w_btn_bg"
+        android:contentDescription="播放或暂停"
+        android:padding="11dp"
+        android:src="@drawable/w_play" />
+
+    <ImageView
+        android:id="@+id/w_next"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:contentDescription="下一首"
+        android:padding="8dp"
+        android:src="@drawable/w_next" />
+</LinearLayout>

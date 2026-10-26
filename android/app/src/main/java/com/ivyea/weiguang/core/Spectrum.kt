@@ -23,6 +23,7 @@ object Spectrum {
 
     private var viz: Visualizer? = null
     private val smooth = FloatArray(N)
+    private val prev = FloatArray(N)
     private var ref = 0.02f
     private var silentFrames = 0
 
@@ -50,6 +51,7 @@ object Spectrum {
     }
 
     fun stop() {
+        Listen.pause()
         try { viz?.setEnabled(false); viz?.release() } catch (_: Throwable) {}
         viz = null
         live = false
@@ -80,11 +82,17 @@ object Spectrum {
         if (peak < 0.0008f) silentFrames++ else silentFrames = 0
         live = silentFrames < 40
         val out = FloatArray(N)
+        var flux = 0f; var hi = 0f; var sum = 0f
         for (b in 0 until N) {
             val v = sqrt((raw[b] / ref).coerceIn(0f, 1f))
+            flux += max(0f, v - prev[b]); prev[b] = v
+            sum += v; if (b >= N * 2 / 3) hi += v
             smooth[b] = if (v > smooth[b]) smooth[b] + (v - smooth[b]) * 0.65f else smooth[b] + (v - smooth[b]) * 0.18f
             out[b] = smooth[b]
         }
         _bands.value = out
+        main.post { if (live) Listen.frame(flux / N, if (sum > 0f) hi / sum else 0f) else Listen.pause() }
     }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
 }

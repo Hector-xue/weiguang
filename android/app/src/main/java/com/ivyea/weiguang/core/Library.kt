@@ -18,9 +18,22 @@ import java.io.File
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
+// id：正数=网易云歌曲 ID；负数=在别的 App 听到、按「歌名|歌手」算出来的本机 ID
 // v=情绪明亮度、e=能量（0~1，AI 打的标签，没打过就是 null）；pic=专辑封面地址（null 没查过，"" 查过没有）
-data class Song(val id: Long, val title: String, val artist: String, val v: Float? = null, val e: Float? = null, val pic: String? = null)
-data class Playlist(val id: String, val name: String, val songIds: List<Long>)
+// src=在哪个 App 听到/同步来的（null=网易云）；nid=对上的网易云 ID（null 没查过，0 没对上）；
+// mid=来源 App 车机接口里的条目 ID；m=开着微光听的时候实测的「活跃度」（越大越激烈）
+data class Song(
+    val id: Long, val title: String, val artist: String,
+    val v: Float? = null, val e: Float? = null, val pic: String? = null,
+    val src: String? = null, val nid: Long? = null, val mid: String? = null, val m: Float? = null,
+) {
+    // 拿歌词、封面、在网易云里点播用的 ID
+    fun cloudId(): Long? = if (id > 0) id else nid?.takeIf { it > 0 }
+}
+// 网易云的歌单 id 是它自己的 mediaId；别的 App 的是「包名|mediaId」
+data class Playlist(val id: String, val name: String, val songIds: List<Long>) {
+    val src: String get() = if ('|' in id) id.substringBefore('|') else Ncm.PKG
+}
 data class Played(val id: Long, val at: Long, val count: Int)
 // 每一次播放的流水，用来学「这个点你常听什么」
 data class Play(val id: Long, val at: Long)
@@ -36,7 +49,7 @@ data class LibState(
     val syncLog: String = "",
 )
 
-// 本机曲库索引：从网易云车机浏览服务读歌单 + 自己记的听歌记录。只存 ID、歌名、歌手
+// 本机曲库索引：从各音乐 App 的车机浏览服务读歌单 + 自己记的听歌记录。只存 ID、歌名、歌手
 object Library {
     private val _state = MutableStateFlow(LibState())
     val state: StateFlow<LibState> = _state
@@ -54,18 +67,109 @@ object Library {
 
     // ---------- 听歌记录 ----------
 
-    fun recordPlay(id: Long, title: String, artist: String) {
+    // ---------- 同一首歌认出来 ----------
+
+    // 歌名歌手归一：小写、去空白和标点，用来认「是不是同一首」
+    fun norm(x: String): String = x.lowercase().filter { it.isLetterOrDigit() }
+
+    fun keyOf(title: String, artist: String) = norm(title) + "|" + norm(artist.split("/", "、", "&", ",").first())
+
+    private val keys = HashMap<String, Long>()
+
+    private fun index(songs: Map<Long, Song>) {
+        keys.clear()
+        for (s in songs.values) if (s.title.isNotEmpty()) remember(s)
+    }
+
+    // 同名同歌手有网易云 ID 的优先
+    private fun remember(s: Song) {
+        val k = keyOf(s.title, s.artist)
+        val old = keys[k]
+        if (old == null || (old < 0 && s.id > 0)) keys[k] = s.id
+    }
+
+    // 没见过的歌给一个固定的负数 ID（同一首歌每次算出来都一样）
+    private fun localId(key: String): Long {
+        var h = -0x340d631b7bdddcdbL
+        for (b in key.toByteArray()) { h = h xor (b.toLong() and 0xff); h *= 0x100000001b3L }
+        return -((h ushr 1) or 1L)
+    }
+
+    // 播放会话里的这首歌在曲库里是哪个 ID
+    fun idOf(pkg: String, mediaId: String?, title: String, artist: String): Long? {
+        if (pkg == Ncm.PKG) return Ncm.songIdOf(mediaId)
+        if (title.isBlank()) return null
+        val k = keyOf(title, artist)
+        return keys[k] ?: localId(k)
+    }
+
+    // ---------- 听歌记录 ----------
+
+    fun recordPlay(id: Long, title: String, artist: String, src: String?) {
         if (file == null || lastPlayed == id) return
         lastPlayed = id
         val s = _state.value
         val songs = s.songs.toMutableMap()
-        songs[id] = (s.songs[id] ?: Song(id, title, artist)).copy(title = title, artist = artist.ifEmpty { s.songs[id]?.artist ?: "" })
-        val old = s.history.firstOrNull { it.id == id }
+        val old = s.songs[id]
+        val song = (old ?: Song(id, title, artist, src = src.takeIf { id < 0 }))
+            .copy(title = title, artist = artist.ifEmpty { old?.artist ?: "" })
+        songs[id] = song
+        remember(song)
+        val oldH = s.history.firstOrNull { it.id == id }
         val nowMs = System.currentTimeMillis()
-        val history = listOf(Played(id, nowMs, (old?.count ?: 0) + 1)) +
+        val history = listOf(Played(id, nowMs, (oldH?.count ?: 0) + 1)) +
             s.history.filter { it.id != id }.take(999)
         _state.value = s.copy(songs = songs, history = history, plays = (s.plays + Play(id, nowMs)).takeLast(3000))
         save()
+    }
+
+    fun setMatch(id: Long, hit: Hit) {
+        val s = _state.value
+        val song = s.songs[id] ?: return
+        val songs = s.songs.toMutableMap()
+        songs[id] = song.copy(nid = hit.id, pic = if (song.pic.isNullOrEmpty()) hit.pic else song.pic)
+        _state.value = s.copy(songs = songs)
+        save()
+    }
+
+    // 点歌前临时对一下网易云 ID（别的 App 听到的歌要在网易云里放时）
+    suspend fun matchNow(s: Song): Long? {
+        s.cloudId()?.let { return it }
+        if (s.nid == 0L) return null
+        val hit = Cloud.match(s.title, s.artist) ?: return null
+        setMatch(s.id, hit)
+        return hit.id.takeIf { it > 0 }
+    }
+
+    // ---------- 实测能量 ----------
+
+    private var mSorted = FloatArray(0)
+
+    private fun rankAll(songs: Map<Long, Song>) {
+        mSorted = songs.values.mapNotNull { it.m }.sorted().toFloatArray()
+    }
+
+    fun measuredCount() = mSorted.size
+
+    fun setMeasured(id: Long, m: Float) {
+        val s = _state.value
+        val song = s.songs[id] ?: return
+        val songs = s.songs.toMutableMap()
+        songs[id] = song.copy(m = song.m?.let { (it + m) / 2f } ?: m)
+        _state.value = s.copy(songs = songs)
+        rankAll(songs)
+        save()
+    }
+
+    // 星图上用的能量：AI 估的和实测的各占一半；实测过的歌不到 8 首时排名不可靠，只用 AI 的
+    fun energy(s: Song): Float? {
+        val e = s.e ?: return null
+        val m = s.m ?: return e
+        if (mSorted.size < 8) return e
+        var lo = 0
+        while (lo < mSorted.size && mSorted[lo] < m) lo++
+        val rank = lo.toFloat() / (mSorted.size - 1).coerceAtLeast(1)
+        return e * 0.5f + rank * 0.5f
     }
 
     // 歌单封面 = 第一首有封面的歌
@@ -74,7 +178,8 @@ object Library {
         return p.songIds.asSequence().take(30).mapNotNull { songs[it]?.pic?.takeIf { u -> u.isNotEmpty() } }.firstOrNull()
     }
 
-    // 给没查过封面的歌补上封面地址：先每个歌单的前几首，再听过的，再其余
+    // 给没查过封面的歌补上封面地址：先每个歌单的前几首，再听过的，再其余；
+    // 别的 App 听到的歌先去网易云对上 ID（顺带拿到封面）
     private var filling = false
     suspend fun fillCovers() {
         if (file == null || filling) return
@@ -85,7 +190,7 @@ object Library {
             s0.playlists.forEach { p -> p.songIds.take(3).forEach { order += it } }
             s0.history.forEach { order += it.id }
             s0.playlists.forEach { p -> order += p.songIds }
-            val todo = order.filter { s0.songs[it]?.pic == null }.take(2000)
+            val todo = order.filter { it > 0 && s0.songs[it]?.pic == null }.take(2000)
             for (batch in todo.chunked(100)) {
                 val got = Cloud.covers(batch) ?: break
                 val s = _state.value
@@ -94,12 +199,19 @@ object Library {
                 _state.value = s.copy(songs = songs)
             }
             if (todo.isNotEmpty()) save()
+            val local = order.filter { it < 0 && s0.songs[it]?.nid == null }.take(150)
+            for (id in local) {
+                val song = _state.value.songs[id] ?: continue
+                val hit = Cloud.match(song.title, song.artist) ?: break
+                setMatch(id, hit)
+                kotlinx.coroutines.delay(200)
+            }
         } finally { filling = false }
     }
 
-    // 网易云的播放队列：把里面的歌补进曲库；队列名和某个歌单同名且更全时，顺便补全这个歌单
-    // （车机接口每个歌单只给前 12 首，在网易云里播一次歌单就能补全）
-    fun absorbQueue(title: String?, items: List<Triple<Long, String, String>>) {
+    // 播放队列：把里面的歌补进曲库；队列名和某个歌单同名且更全时，顺便补全这个歌单
+    // （网易云车机接口每个歌单只给前 12 首，在网易云里播一次歌单就能补全）
+    fun absorbQueue(title: String?, items: List<Triple<Long, String, String>>, src: String? = null) {
         if (file == null || items.isEmpty()) return
         val s = _state.value
         val songs = s.songs.toMutableMap()
@@ -107,13 +219,15 @@ object Library {
         for ((id, t, a) in items) {
             val old = songs[id]
             if (old == null || (old.title.isEmpty() && t.isNotEmpty())) {
-                songs[id] = (old ?: Song(id, t, a)).copy(title = t.ifEmpty { old?.title ?: "" }, artist = a.ifEmpty { old?.artist ?: "" })
+                val song = (old ?: Song(id, t, a, src = src.takeIf { id < 0 })).copy(title = t.ifEmpty { old?.title ?: "" }, artist = a.ifEmpty { old?.artist ?: "" })
+                songs[id] = song
+                remember(song)
                 changed = true
             }
         }
         val ids = items.map { it.first }
         val playlists = s.playlists.map { p ->
-            if (!title.isNullOrBlank() && p.name == title.trim() && ids.size > p.songIds.size) { changed = true; p.copy(songIds = ids) } else p
+            if (!title.isNullOrBlank() && p.src == (src ?: Ncm.PKG) && p.name == title.trim() && ids.size > p.songIds.size) { changed = true; p.copy(songIds = ids) } else p
         }
         if (!changed) return
         _state.value = s.copy(songs = songs, playlists = playlists)
@@ -131,64 +245,143 @@ object Library {
 
     // ---------- 同步歌单 ----------
 
+    // 每个装了的音乐 App 都试一遍；连不上的那家保留上次的歌单，明细写进同步记录
     suspend fun sync(ctx: Context) {
         if (_state.value.syncing) return
-        set { it.copy(syncing = true, syncMsg = "连接网易云…") }
-        val b = connect(ctx)
-        if (b == null) {
-            set { it.copy(syncing = false, syncMsg = connectError) }
-            return
-        }
+        val apps = Players.installed(ctx)
+        if (apps.isEmpty()) { set { it.copy(syncMsg = "还没装音乐 App") }; return }
+        set { it.copy(syncing = true, syncMsg = "连接${apps.first().short}…") }
+        val songs = _state.value.songs.toMutableMap()
+        val playlists = ArrayList<Playlist>()
+        val log = StringBuilder()
+        val errs = ArrayList<String>()
+        var ok = 0
         try {
-            val root = all(b, b.root)
-            val mine = root.firstOrNull { it.mediaId == "my_music" }
-                ?: root.firstOrNull { it.description.title?.contains("我的") == true }
-            if (mine == null) {
-                set { it.copy(syncing = false, syncMsg = "网易云没给出「我的音乐」") }
-                return
-            }
-            val lists = all(b, mine.mediaId!!).filter { it.isBrowsable && it.mediaId != null }
-            val songs = _state.value.songs.toMutableMap()
-            val playlists = ArrayList<Playlist>()
-            val log = StringBuilder()
-            lists.forEachIndexed { i, pl ->
-                val name = pl.description.title?.toString() ?: "歌单"
-                set { it.copy(syncMsg = "读取歌单 ${i + 1}/${lists.size} · $name") }
-                val ids = ArrayList<Long>()
-                for (item in all(b, pl.mediaId!!)) {
-                    if (!item.isPlayable) continue
-                    val id = Ncm.songIdOf(item.mediaId) ?: continue
-                    val artist = item.description.subtitle?.toString()?.takeIf { it.isNotBlank() } ?: songs[id]?.artist ?: ""
-                    val title = item.description.title?.toString() ?: songs[id]?.title ?: ""
-                    songs[id] = (songs[id] ?: Song(id, title, artist)).copy(title = title, artist = artist)
-                    ids += id
+            for (p in apps) {
+                set { it.copy(syncMsg = "连接${p.short}…") }
+                val b = connect(ctx, p.pkg)
+                if (b == null) {
+                    errs += "${p.short}：$connectError"
+                    log.append("【${p.short}】").append(connectError).append('\n')
+                    playlists += _state.value.playlists.filter { it.src == p.pkg }
+                    continue
                 }
-                // 车机接口给得不全时，保留以前从播放队列补全的那份
-                val old = _state.value.playlists.firstOrNull { it.id == pl.mediaId }
-                val keep = if (old != null && old.songIds.size > ids.size) old.songIds else ids
-                playlists += Playlist(pl.mediaId!!, name, keep)
-                log.append(name).append("：接口给 ").append(ids.size).append(" 首").append(if (keep !== ids) "，保留补全的 ${keep.size} 首" else "").append('\n')
+                try {
+                    val got = if (p.pkg == Ncm.PKG) syncNcm(b, songs, log) else syncOther(b, p, songs, log)
+                    if (got == null) {
+                        playlists += _state.value.playlists.filter { it.src == p.pkg }
+                        errs += "${p.short}：没读到歌单"
+                    } else { playlists += got; ok++ }
+                } catch (_: Throwable) {
+                    errs += "${p.short}：读取中断"
+                    playlists += _state.value.playlists.filter { it.src == p.pkg }
+                } finally {
+                    try { b.disconnect() } catch (_: Throwable) {}
+                }
             }
-            set { it.copy(songs = songs, playlists = playlists, syncedAt = System.currentTimeMillis(), syncing = false, syncMsg = "", syncLog = log.toString()) }
-            save()
         } finally {
-            try { b.disconnect() } catch (_: Throwable) {}
-            if (_state.value.syncing) set { it.copy(syncing = false) }
+            val old = _state.value
+            set {
+                it.copy(
+                    songs = songs, playlists = playlists, syncing = false,
+                    syncedAt = if (ok > 0) System.currentTimeMillis() else old.syncedAt,
+                    // 有一家成功就不打扰；全失败才把原因摆出来
+                    syncMsg = if (ok == 0) errs.joinToString("\n") else "",
+                    syncLog = log.toString(),
+                )
+            }
+            index(songs)
+            save()
         }
         fillCovers()
     }
 
+    private fun songOf(songs: MutableMap<Long, Song>, item: MediaBrowser.MediaItem, src: String): Long? {
+        val title = item.description.title?.toString()?.trim().orEmpty()
+        val artist = item.description.subtitle?.toString()?.trim().orEmpty()
+        if (src == Ncm.PKG) {
+            val id = Ncm.songIdOf(item.mediaId) ?: return null
+            val t = title.ifEmpty { songs[id]?.title ?: "" }
+            val a = artist.ifEmpty { songs[id]?.artist ?: "" }
+            songs[id] = (songs[id] ?: Song(id, t, a)).copy(title = t, artist = a)
+            return id
+        }
+        if (title.isEmpty()) return null
+        val k = keyOf(title, artist)
+        val id = keys[k] ?: localId(k)
+        val old = songs[id]
+        val song = old?.let { if (it.id < 0 && it.src == src) it.copy(mid = item.mediaId) else it }
+            ?: Song(id, title, artist, src = src, mid = item.mediaId)
+        songs[id] = song
+        remember(song)
+        return id
+    }
+
+    private suspend fun syncNcm(b: MediaBrowser, songs: MutableMap<Long, Song>, log: StringBuilder): List<Playlist>? {
+        val root = all(b, b.root)
+        val mine = root.firstOrNull { it.mediaId == "my_music" }
+            ?: root.firstOrNull { it.description.title?.contains("我的") == true }
+        if (mine == null) { log.append("【网易云】没给出「我的音乐」\n"); return null }
+        val lists = all(b, mine.mediaId!!).filter { it.isBrowsable && it.mediaId != null }
+        val out = ArrayList<Playlist>()
+        lists.forEachIndexed { i, pl ->
+            val name = pl.description.title?.toString() ?: "歌单"
+            set { it.copy(syncMsg = "网易云 ${i + 1}/${lists.size} · $name") }
+            val ids = ArrayList<Long>()
+            for (item in all(b, pl.mediaId!!)) if (item.isPlayable) songOf(songs, item, Ncm.PKG)?.let { ids += it }
+            // 车机接口给得不全时，保留以前从播放队列补全的那份
+            val old = _state.value.playlists.firstOrNull { it.id == pl.mediaId }
+            val keep = if (old != null && old.songIds.size > ids.size) old.songIds else ids
+            out += Playlist(pl.mediaId!!, name, keep)
+            log.append(name).append("：接口给 ").append(ids.size).append(" 首").append(if (keep !== ids) "，保留补全的 ${keep.size} 首" else "").append('\n')
+        }
+        return out
+    }
+
+    private val mineWords = Regex("我的|收藏|喜欢|歌单|最近|下载|本地|红心|自建")
+
+    // 别家的车机目录长什么样不知道：先找「我的/收藏/歌单」这类节点，往下看两层，有歌的节点就当一张歌单
+    private suspend fun syncOther(b: MediaBrowser, p: Player, songs: MutableMap<Long, Song>, log: StringBuilder): List<Playlist>? {
+        val root = all(b, b.root)
+        if (root.isEmpty()) { log.append("【${p.short}】车机目录是空的\n"); return null }
+        val out = ArrayList<Playlist>()
+        fun add(id: String, name: String, items: List<MediaBrowser.MediaItem>) {
+            val ids = items.filter { it.isPlayable }.mapNotNull { songOf(songs, it, p.pkg) }.distinct()
+            if (ids.isEmpty() || out.any { it.id == "${p.pkg}|$id" }) return
+            out += Playlist("${p.pkg}|$id", name, ids)
+            log.append("【${p.short}】").append(name).append("：").append(ids.size).append(" 首\n")
+        }
+        add("root", "${p.short} · 首页", root)
+        val tops = root.filter { it.isBrowsable && it.mediaId != null }
+        val nodes = tops.filter { mineWords.containsMatchIn(it.description.title ?: "") }.ifEmpty { tops }.take(8)
+        for ((i, n) in nodes.withIndex()) {
+            val name = n.description.title?.toString() ?: "歌单"
+            set { it.copy(syncMsg = "${p.short} ${i + 1}/${nodes.size} · $name") }
+            val kids = all(b, n.mediaId!!)
+            add(n.mediaId!!, name, kids)
+            for (k in kids.filter { it.isBrowsable && it.mediaId != null }.take(20)) {
+                if (out.size >= 40) break
+                add(k.mediaId!!, k.description.title?.toString() ?: name, all(b, k.mediaId!!).take(500))
+            }
+        }
+        if (out.isEmpty()) log.append("【${p.short}】目录里没找到歌\n")
+        return out.takeIf { it.isNotEmpty() }
+    }
+
     private inline fun set(f: (LibState) -> LibState) { _state.value = f(_state.value) }
 
-    private var connectError = ""
+    var connectError = ""
+        private set
 
-    private suspend fun connect(ctx: Context): MediaBrowser? {
-        if (Ncm.version(ctx) == null) { connectError = "还没装网易云"; return null }
+    // 连某个 App 的车机浏览服务（网易云要先给微光开通知使用权才肯连）
+    suspend fun connect(ctx: Context, pkg: String): MediaBrowser? {
+        val name = Players.nameOf(pkg)
+        if (Players.version(ctx, pkg) == null) { connectError = "还没装$name"; return null }
         val svc = ctx.packageManager
-            .queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE).setPackage(Ncm.PKG), 0)
+            .queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE).setPackage(pkg), 0)
             .firstOrNull()?.serviceInfo
-        if (svc == null) { connectError = "这个版本的网易云没有开放歌单接口"; return null }
-        connectError = "网易云拒绝了连接。确认已给微光开「通知使用权」；小米手机还要在应用设置里允许微光「关联启动」"
+        if (svc == null) { connectError = "这个版本的${name}没有开放车机接口，只能读正在播放"; return null }
+        connectError = "${name}拒绝了连接。确认已给微光开「通知使用权」；小米手机还要在应用设置里允许微光「关联启动」"
         var refused = false
         val b = withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<MediaBrowser?> { cont ->
@@ -201,7 +394,7 @@ object Library {
                 b.connect()
             }
         }
-        if (b == null && !refused) connectError = "连接网易云超时，稍后再试"
+        if (b == null && !refused) connectError = "连接${name}超时，稍后再试"
         return b
     }
 
@@ -265,7 +458,13 @@ object Library {
                     val id = s.getLong("id")
                     val v = if (s.has("v")) s.optDouble("v").toFloat() else null
                     val e = if (s.has("e")) s.optDouble("e").toFloat() else null
-                    songs[id] = Song(id, s.optString("t"), s.optString("a"), v, e, if (s.has("p")) s.optString("p") else null)
+                    songs[id] = Song(
+                        id, s.optString("t"), s.optString("a"), v, e, if (s.has("p")) s.optString("p") else null,
+                        src = if (s.has("s")) s.optString("s") else null,
+                        nid = if (s.has("n")) s.optLong("n") else null,
+                        mid = if (s.has("d")) s.optString("d") else null,
+                        m = if (s.has("m")) s.optDouble("m").toFloat() else null,
+                    )
                 }
             }
             val playlists = ArrayList<Playlist>()
@@ -292,6 +491,8 @@ object Library {
                 }
             }
             _state.value = LibState(songs, playlists, history, plays, o.optLong("syncedAt"))
+            index(songs)
+            rankAll(songs)
         } catch (_: Throwable) {
             // 文件坏了就当没有，下次同步重建
         }
@@ -307,6 +508,10 @@ object Library {
             for (song in s.songs.values) put(JSONObject().put("id", song.id).put("t", song.title).put("a", song.artist).apply {
                 if (song.v != null && song.e != null) { put("v", song.v.toDouble()); put("e", song.e.toDouble()) }
                 if (song.pic != null) put("p", song.pic)
+                if (song.src != null) put("s", song.src)
+                if (song.nid != null) put("n", song.nid)
+                if (song.mid != null) put("d", song.mid)
+                if (song.m != null) put("m", song.m.toDouble())
             })
         })
         o.put("playlists", JSONArray().apply {

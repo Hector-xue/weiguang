@@ -51,8 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.core.Buddy
 import com.ivyea.weiguang.core.Library
-import com.ivyea.weiguang.core.Ncm
 import com.ivyea.weiguang.core.NowPlaying
+import com.ivyea.weiguang.core.Players
+import com.ivyea.weiguang.core.Weather
+import com.ivyea.weiguang.service.NowWidget
 
 private const val AUTO_SYNC_MS = 12L * 3600 * 1000
 
@@ -81,12 +83,18 @@ fun App() {
     LaunchedEffect(listenerOn) {
         if (!listenerOn) return@LaunchedEffect
         NowPlaying.attach(ctx)
-        if (Ncm.version(ctx) != null && System.currentTimeMillis() - Library.state.value.syncedAt > AUTO_SYNC_MS) Library.sync(ctx)
+        if (Players.installed(ctx).isNotEmpty() && System.currentTimeMillis() - Library.state.value.syncedAt > AUTO_SYNC_MS) Library.sync(ctx)
         else Library.fillCovers()
     }
 
-    // 换歌、换时段时更新「微光在想」；星图连播常驻
-    LaunchedEffect(listenerOn, now?.songId, tick) { if (listenerOn) Buddy.think() }
+    // 换歌、换时段时更新「微光在想」（先看一眼天气）；连播常驻；小组件跟着心里话更新
+    LaunchedEffect(listenerOn, now?.songId, tick) {
+        if (!listenerOn) return@LaunchedEffect
+        Weather.refresh(ctx)
+        Buddy.think()
+    }
+    val thought by Buddy.thought.collectAsState()
+    LaunchedEffect(thought) { NowWidget.refresh(ctx.applicationContext) }
     LaunchedEffect(Unit) { Buddy.runQueue(ctx.applicationContext) }
 
     BackHandler(enabled = tab != 0) { tab = 0 }
@@ -130,26 +138,27 @@ private fun Dock(tab: Int, modifier: Modifier, onTab: (Int) -> Unit) {
 private fun Onboarding(time: State<Float>) {
     val ctx = LocalContext.current
     val tick = rememberResumeTick()
-    val ncm = remember(tick) { Ncm.version(ctx) }
+    val apps = remember(tick) { Players.installed(ctx) }
     Column(
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ParticleOrb(Modifier.fillMaxWidth().height(300.dp), time, { 0.5f })
         Text("微光", fontSize = 34.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
-        Text("陪你听网易云的歌", fontSize = 16.sp, color = Wg.ink2, modifier = Modifier.padding(top = 6.dp))
+        Text("懂你此刻的听歌伙伴", fontSize = 16.sp, color = Wg.ink2, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(32.dp))
         Step(
             "1", "读取正在播放",
-            "打开「通知使用权」，微光才知道网易云在放什么。只读播放信息，不看你的通知内容。",
+            "打开「通知使用权」，微光才知道音乐 App 在放什么。只读播放信息，不看你的通知内容。",
             done = false, action = "去开启",
         ) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         Spacer(Modifier.height(12.dp))
         Step(
-            "2", if (ncm != null) "网易云已就绪" else "还没装网易云",
-            if (ncm != null) "v$ncm" else "微光陪你听网易云的歌，先装一个",
-            done = ncm != null, action = if (ncm != null) "" else "去下载",
-        ) { Ncm.openStore(ctx) }
+            "2", if (apps.isNotEmpty()) "音乐 App 已就绪" else "还没装音乐 App",
+            if (apps.isNotEmpty()) apps.map { it.short }.distinct().joinToString("、").let { "$it。网易云能读歌单、按歌点播，其他 App 读播放和控制" }
+            else "网易云、QQ音乐、酷狗、酷我、汽水都行；网易云配合得最好",
+            done = apps.isNotEmpty(), action = if (apps.isNotEmpty()) "" else "去下载",
+        ) { Players.openStore(ctx) }
         Text(
             "粒子频谱和悬浮光球在设置里，随时可以开。",
             fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 20.dp, bottom = 32.dp),

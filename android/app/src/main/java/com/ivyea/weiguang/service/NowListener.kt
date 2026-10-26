@@ -30,6 +30,7 @@ class NowListener : NotificationListenerService() {
         instance = this
         Prefs.init(this)
         Library.init(this)
+        com.ivyea.weiguang.core.Diary.init(this)
         NowPlaying.attach(this)
         syncOrb()
     }
