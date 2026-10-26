@@ -23,12 +23,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// 微光能陪着听的音乐 App。读播放、控制对所有 App 都一样（系统播放会话）；
+// 微光能陪着听的音乐 App（洛雪有公开的点歌链接，最好用）。读播放、控制对所有 App 都一样（系统播放会话）；
 // 点歌各家不同：网易云按歌曲 ID 直接放（真机验证过），其他 App 没有公开的点歌链接，
 // 只能走安卓的标准点歌途径，一条条试、试完看它真放了没有，接住的那条记下来下次先用
 data class Player(val pkg: String, val name: String, val short: String)
 
 object Players {
+    const val LX = "cn.toside.music.mobile"
+
     val all = listOf(
         Player(Ncm.PKG, "网易云音乐", "网易云"),
         Player("com.tencent.qqmusic", "QQ音乐", "QQ音乐"),
@@ -36,8 +38,12 @@ object Players {
         Player("com.kugou.android.lite", "酷狗概念版", "酷狗"),
         Player("cn.kuwo.player", "酷我音乐", "酷我"),
         Player("com.luna.music", "汽水音乐", "汽水"),
+        Player(LX, "洛雪音乐", "洛雪"),
+        Player("fun.upup.musicfree", "MusicFree", "MusicFree"),
     )
-    private val known = all.associateBy { it.pkg }
+    // 微光自己（放自建曲库和 AI 作曲）也算一个，但不在「装了哪些」里
+    private val self = Player(Local.PKG, "微光", "微光")
+    private val known = (all + self).associateBy { it.pkg }
 
     fun isKnown(pkg: String?) = pkg != null && pkg in known
 
@@ -52,14 +58,17 @@ object Players {
 
     fun nameOf(pkg: String?): String = known[pkg]?.short ?: "音乐 App"
 
+    // 点歌能选的：装了的 App，配了自建曲库时加上微光自己
+    fun choices(ctx: Context): List<Player> = installed(ctx) + if (Sources.servers.isNotEmpty()) listOf(self) else emptyList()
+
     // 点歌用哪个 App：设置里指定的 > 正在放的 > 上次放过的 > 网易云 > 装了的第一个
     fun target(ctx: Context): String? {
-        val inst = installed(ctx).map { it.pkg }
+        val inst = choices(ctx).map { it.pkg }
         if (inst.isEmpty()) return null
         Prefs.player.takeIf { it in inst }?.let { return it }
         NowPlaying.now.value?.pkg?.takeIf { it in inst }?.let { return it }
         Prefs.lastPlayer.takeIf { it in inst }?.let { return it }
-        return if (Ncm.PKG in inst) Ncm.PKG else inst.first()
+        return if (Ncm.PKG in inst) Ncm.PKG else inst.first { it != Local.PKG || inst.size == 1 }
     }
 
     fun openApp(ctx: Context, pkg: String? = target(ctx)) {
@@ -75,13 +84,26 @@ object Players {
 
     // ---------- 点歌 ----------
 
-    // 点歌方式：session=对它的播放会话按歌名点；mid=按车机接口里的条目点；intent=系统「按名字播放」
-    val methods = linkedMapOf("session" to "按歌名点播", "mid" to "车机接口点播", "intent" to "系统点歌")
+    // 点歌方式：lx=洛雪的点歌链接；session=对它的播放会话按歌名点；mid=按车机接口里的条目点；intent=系统「按名字播放」
+    val methods = linkedMapOf("lx" to "洛雪点歌链接", "session" to "按歌名点播", "mid" to "车机接口点播", "intent" to "系统点歌")
 
+    // 自建曲库里有的歌（或 AI 作曲的）优先微光自己放：不切 App、不受版权和会员限制
     fun play(ctx: Context, s: Song) {
         val app = ctx.applicationContext
         val pkg = target(app) ?: run { toast(app, "还没装音乐 App"); return }
-        scope.launch { playIn(app, pkg, s) }
+        if (s.loc != null && (Prefs.player.isEmpty() || pkg == Local.PKG || s.src == Local.PKG)) {
+            if (Local.play(app, listOf(s))) return
+        }
+        scope.launch {
+            if (pkg == Local.PKG) {
+                val it = Sources.find(s.title, s.artist)
+                if (it != null && Local.play(app, listOf(s.copy(loc = it.loc, pic = s.pic ?: it.cover)))) return@launch
+                val other = installed(app).firstOrNull()?.pkg
+                if (other == null) { toast(app, "自建曲库里没有这首"); return@launch }
+                toast(app, "自建曲库里没有这首，换${nameOf(other)}放")
+                playIn(app, other, s)
+            } else playIn(app, pkg, s)
+        }
     }
 
     private suspend fun playIn(ctx: Context, pkg: String, s: Song) {
@@ -94,9 +116,11 @@ object Players {
         }
         val name = nameOf(pkg)
         val learned = Prefs.how(pkg)
-        val order = (listOfNotNull(learned.takeIf { it in methods }) + methods.keys).distinct()
+        val first = if (pkg == LX) listOf("lx") else emptyList()
+        val order = (listOfNotNull(learned.takeIf { it in methods }) + first + methods.keys.filter { it != "lx" }).distinct()
         for (m in order) {
             val ok = when (m) {
+                "lx" -> pkg == LX && byLx(ctx, s)
                 "session" -> bySession(pkg, s)
                 "mid" -> byMediaId(ctx, pkg, s)
                 else -> byIntent(ctx, pkg, s)
@@ -119,6 +143,19 @@ object Players {
         putString(MediaStore.EXTRA_MEDIA_TITLE, s.title)
         putString(MediaStore.EXTRA_MEDIA_ARTIST, s.artist)
         putString(SearchManager.QUERY, query(s))
+    }
+
+    // 洛雪公开了点歌链接：lxmusic://music/searchPlay?data={name,singer}（见它的 Scheme URL 文档）
+    private suspend fun byLx(ctx: Context, s: Song): Boolean {
+        val data = org.json.JSONObject().put("name", s.title).put("singer", s.artist.split("/", "、", "&", ",").first().trim())
+        val i = Intent(Intent.ACTION_VIEW, Uri.parse("lxmusic://music/searchPlay?data=" + Uri.encode(data.toString())))
+            .setPackage(LX).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            ctx.startActivity(i)
+            val ok = playing(LX, s, 9000)
+            if (ok) scheduleReturn(ctx, wait = false)
+            ok
+        } catch (_: Throwable) { false }
     }
 
     private suspend fun bySession(pkg: String, s: Song): Boolean {
@@ -169,8 +206,15 @@ object Players {
 
     // 只是打开某个 App 的搜索：网易云有搜索链接，其他 App 复制歌名后打开
     fun search(ctx: Context, q: String) {
-        val pkg = target(ctx) ?: return
+        val pkg = target(ctx)?.takeIf { it != Local.PKG } ?: installed(ctx).firstOrNull()?.pkg ?: return
         if (pkg == Ncm.PKG) { Ncm.search(ctx, q); return }
+        if (pkg == LX) {
+            try {
+                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("lxmusic://music/search?data=" + Uri.encode(org.json.JSONObject().put("keywords", q).toString())))
+                    .setPackage(LX).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Throwable) {}
+        }
         copy(ctx, q)
         openApp(ctx, pkg)
         toast(ctx, "已复制「$q」，在${nameOf(pkg)}里粘贴搜索")

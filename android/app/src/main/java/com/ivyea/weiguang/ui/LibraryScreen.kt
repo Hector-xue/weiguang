@@ -322,7 +322,7 @@ private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () ->
             PlaylistArt(p, Modifier.size(96.dp).shadow(16.dp, RoundedCornerShape(20.dp), spotColor = accent), 20, false)
             Column(Modifier.padding(start = 14.dp)) {
                 Text(p.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("$count 首 · ${Players.nameOf(p.src)}", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(top = 4.dp))
+                Text("$count 首 · ${if (p.src == com.ivyea.weiguang.core.Local.PKG) "微光自己放" else Players.nameOf(p.src)}", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.padding(top = 4.dp))
             }
         }
         Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -331,7 +331,7 @@ private fun PlaylistHeader(p: Playlist, count: Int, accent: Color, onBack: () ->
                 modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(accent)
                     .clickable(onClick = onQueue).padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            Text(
+            if (p.src != com.ivyea.weiguang.core.Local.PKG) Text(
                 if (ncm) "在网易云打开" else "打开${Players.nameOf(p.src)}", fontSize = 13.sp, color = Wg.ink2,
                 modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.7f))
                     .clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 8.dp),

@@ -31,6 +31,8 @@ class NowListener : NotificationListenerService() {
         Prefs.init(this)
         Library.init(this)
         com.ivyea.weiguang.core.Diary.init(this)
+        com.ivyea.weiguang.core.Sources.init(filesDir)
+        if (com.ivyea.weiguang.core.Sources.servers.isEmpty()) com.ivyea.weiguang.core.Sources.load()
         NowPlaying.attach(this)
         syncOrb()
     }

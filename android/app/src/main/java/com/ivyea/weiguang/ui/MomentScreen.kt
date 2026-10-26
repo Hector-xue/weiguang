@@ -92,6 +92,8 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
 
     LaunchedEffect(msgs.size, busy) { if (msgs.isNotEmpty()) list.animateScrollToItem(msgs.size + (if (busy) 1 else 0)) }
 
+    var sheet by rememberSaveable { mutableStateOf("") }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 20.dp).padding(bottom = 92.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.logo_mark), null, Modifier.size(28.dp).shadow(10.dp, CircleShape, spotColor = Wg.warm).clip(CircleShape))
@@ -149,6 +151,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
         ) {
             if (msgs.isEmpty()) {
                 item { FeelCard { f -> scope.launch { Buddy.feel(f) } } }
+                item { MakeRow(onHum = { sheet = "hum" }, onGen = { sheet = "gen" }) }
                 item { Habit(accent) }
             }
             items(msgs) { m -> Bubble(m, accent) }
@@ -157,6 +160,11 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
 
         if (!busy && msgs.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "✦ 作一首", fontSize = 12.5.sp, color = Color.White,
+                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Wg.lav)
+                        .clickable { sheet = "gen" }.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
                 suggestions.forEach { s ->
                     Text(
                         s, fontSize = 12.5.sp, color = Color(0xFF6A66A8),
@@ -181,6 +189,14 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            if (input.isEmpty()) {
+                Text(
+                    "哼", fontSize = 14.sp, color = Wg.lav, fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(end = 6.dp).size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.7f))
+                        .clickable { sheet = "hum" }.padding(top = 7.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
             Box(
                 Modifier.size(38.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFFF6AB86), Wg.warm)))
                     .clickable(enabled = !busy) { send(input) },
@@ -189,6 +205,11 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
                 Text("↑", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+    }
+    when (sheet) {
+        "hum" -> HumSheet(time, accent, { sheet = "" }, onOpenSettings)
+        "gen" -> GenSheet(time, accent, Buddy.radio.value?.say ?: msgs.lastOrNull { it.me }?.text ?: "", { sheet = "" }, onOpenSettings)
+    }
     }
 }
 
@@ -336,6 +357,19 @@ private fun Habit(accent: Color) {
                     Text(s.title, fontSize = 12.5.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
                     Text(s.artist, fontSize = 11.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 2.dp))
                 }
+            }
+        }
+    }
+}
+
+// 哼一段认歌 / 让微光作一首
+@Composable
+private fun MakeRow(onHum: () -> Unit, onGen: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        listOf(Triple("哼一段", "想不起歌名？哼给我听", onHum), Triple("作一首", "按此刻的心情写首歌", onGen)).forEach { (t, sub, f) ->
+            Column(Modifier.weight(1f).glass(18.dp, 3.dp).clickable(onClick = f).padding(14.dp)) {
+                Text(t, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink)
+                Text(sub, fontSize = 11.5.sp, color = Wg.ink3, modifier = Modifier.padding(top = 3.dp))
             }
         }
     }

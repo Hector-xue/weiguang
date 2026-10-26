@@ -42,13 +42,18 @@ object Art {
         val f = dir?.let { File(it, Integer.toHexString(key.hashCode()) + "_" + key.length) }
         if (f != null && f.exists()) BitmapFactory.decodeFile(f.path)?.let { return it }
         return try {
-            val c = URL("$url?param=${px}y$px").openConnection() as HttpURLConnection
+            // 网易云的图按 ?param= 直接给缩略图；自建曲库的封面地址自带参数，原样取再缩
+            val c = URL(if (url.contains("music.126.net")) "$url?param=${px}y$px" else url).openConnection() as HttpURLConnection
             c.connectTimeout = 8000
             c.readTimeout = 10000
             try {
                 if (c.responseCode != 200) return null
                 val bytes = c.inputStream.readBytes()
-                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                var sample = 1
+                while (bounds.outWidth / (sample * 2) >= px) sample *= 2
+                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
                 f?.let { runCatching { it.writeBytes(bytes) } }
                 bmp
             } finally { c.disconnect() }

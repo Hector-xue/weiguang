@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.ivyea.weiguang.core.Ai
 import com.ivyea.weiguang.core.Library
 import com.ivyea.weiguang.core.Buddy
+import com.ivyea.weiguang.core.Local
 import com.ivyea.weiguang.core.Ncm
 import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Prefs
@@ -132,7 +133,16 @@ fun SettingsPage() {
         AppsSection(tick)
 
         Spacer(Modifier.height(16.dp))
+        ServersSection()
+
+        Spacer(Modifier.height(16.dp))
         AiSection()
+
+        Spacer(Modifier.height(16.dp))
+        GenSection()
+
+        Spacer(Modifier.height(16.dp))
+        HumSection()
 
         Spacer(Modifier.height(16.dp))
         Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp)) {
@@ -159,14 +169,14 @@ fun SettingsPage() {
             }
         }
         Text(
-            "微光只读取音乐 App 的播放信息和它们开放的歌单，存在这台手机里。歌词和封面按歌曲 ID 或歌名向网易云公开接口查询，不带账号。打开「参考天气」后，把约 10 公里精度的位置发给 Open-Meteo 查天气。用 AI 时，只把歌名、歌手和你说的话发给你填的 AI 服务。",
+            "微光只读取音乐 App 的播放信息和它们开放的歌单，存在这台手机里。歌词和封面按歌曲 ID 或歌名向网易云公开接口查询，不带账号。打开「参考天气」后，把约 10 公里精度的位置发给 Open-Meteo 查天气。用 AI 时，只把歌名、歌手和你说的话发给你填的 AI 服务；作曲把描述发给你填的作曲服务；哼唱识别把那 10 秒录音发给你的 ACRCloud 项目。自建曲库只连你填的服务器。",
             fontSize = 12.sp, color = Wg.ink3, modifier = Modifier.padding(top = 18.dp, start = 4.dp),
         )
     }
 }
 
 @Composable
-private fun Line() {
+internal fun Line() {
     Box(Modifier.fillMaxWidth().padding(horizontal = 18.dp).height(1.dp).background(Wg.line))
 }
 
@@ -263,7 +273,7 @@ private fun AiSection() {
 }
 
 @Composable
-private fun Field(label: String, value: String, hint: String, secret: Boolean = false, onChange: (String) -> Unit) {
+internal fun Field(label: String, value: String, hint: String, secret: Boolean = false, onChange: (String) -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp))
             .background(Color.White.copy(alpha = 0.6f)).padding(horizontal = 14.dp, vertical = 11.dp),
@@ -287,12 +297,12 @@ private fun Field(label: String, value: String, hint: String, secret: Boolean = 
 @Composable
 private fun AppsSection(tick: Int) {
     val ctx = LocalContext.current
-    val apps = remember(tick) { Players.installed(ctx) }
+    val apps = remember(tick) { Players.choices(ctx) }
     var pick by remember { mutableStateOf(Prefs.player) }
     Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp).padding(vertical = 14.dp)) {
         Text("音乐 App", fontSize = 15.sp, color = Wg.ink, modifier = Modifier.padding(horizontal = 18.dp))
         Text(
-            "网易云能读歌单、按歌点播；QQ音乐、酷狗、酷我、汽水能读播放和控制，点歌靠系统通道，接不住就打开它并复制好歌名",
+            "网易云能读歌单、按歌点播；洛雪有点歌链接，搜到就放；QQ音乐、酷狗、酷我、汽水、MusicFree 能读播放和控制，点歌靠系统通道，接不住就打开它并复制好歌名",
             fontSize = 12.sp, color = Wg.ink2, lineHeight = 18.sp, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 3.dp),
         )
         if (apps.isEmpty()) {
@@ -314,8 +324,8 @@ private fun AppsSection(tick: Int) {
                 )
             }
         }
-        if (pick.isEmpty()) Text("自动：正在放的那个，没在放就用上次放过的", fontSize = 11.5.sp, color = Wg.ink3, modifier = Modifier.padding(start = 18.dp))
-        apps.forEach { a ->
+        if (pick.isEmpty()) Text("自动：自建曲库里有的微光自己放；其余用正在放的那个，没在放就用上次放过的", fontSize = 11.5.sp, color = Wg.ink3, modifier = Modifier.padding(start = 18.dp))
+        apps.filter { it.pkg != Local.PKG }.forEach { a ->
             Line()
             val how = remember(tick) { Prefs.how(a.pkg) }
             val v = remember(tick) { Players.version(ctx, a.pkg) }
@@ -325,6 +335,7 @@ private fun AppsSection(tick: Int) {
                     Text(
                         when {
                             a.pkg == Ncm.PKG -> "按歌曲 ID 点播"
+                            a.pkg == Players.LX && how.isEmpty() -> "用洛雪的点歌链接"
                             how == "none" -> "上次点歌没接住，只能打开它搜"
                             how.isNotEmpty() -> "点歌方式：${Players.methods[how] ?: how}"
                             else -> "还没点过歌"

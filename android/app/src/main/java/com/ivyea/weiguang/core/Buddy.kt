@@ -355,6 +355,10 @@ object Buddy {
         _radio.value = null
         _queue.value = ids
         _qIdx.value = 0
+        // 整串都在自建曲库里：一次交给微光自己的播放器，无缝连着放
+        val songs = Library.state.value.songs
+        val all = ids.mapNotNull { songs[it] }
+        if (all.size == ids.size && all.all { it.loc != null } && (Prefs.player.isEmpty() || Prefs.player == Local.PKG) && Local.play(ctx, all)) return
         play(ctx, ids[0])
     }
 
@@ -394,6 +398,9 @@ object Buddy {
             val q = _queue.value
             val n = NowPlaying.now.value
             if (q.isEmpty() || n == null) { nearEnd = false; continue }
+            // 手动切到了线上的另一首，进度跟过去
+            val at = q.indexOfFirst { same(n, it) }
+            if (at >= 0 && at != _qIdx.value) _qIdx.value = at
             val cur = q.getOrNull(_qIdx.value)
             if (cur == null) { stopQueue(); continue }
             if (same(n, cur)) {
@@ -405,7 +412,12 @@ object Buddy {
                 val f = _radio.value
                 if (f != null && q.size - next <= 2) _queue.value = q + radioBatch(f, q.toSet())
                 val q2 = _queue.value
-                if (next < q2.size) { _qIdx.value = next; play(ctx, q2[next]) } else stopQueue()
+                when {
+                    next >= q2.size -> stopQueue()
+                    // 播放器自己已经接到线上的下一首（微光自己的播放器整串放的时候）
+                    same(n, q2[next]) -> _qIdx.value = next
+                    else -> { _qIdx.value = next; play(ctx, q2[next]) }
+                }
             }
         }
     }

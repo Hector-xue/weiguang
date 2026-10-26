@@ -60,4 +60,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.palette:palette:1.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // 自建曲库（Navidrome/Jellyfin/WebDAV）和 AI 作曲的歌由微光自己放
+    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    implementation("androidx.media3:media3-session:1.5.0")
+    // WebDAV 要 PROPFIND，系统自带的 HttpURLConnection 不支持
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

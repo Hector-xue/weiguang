@@ -21,11 +21,13 @@ import kotlin.coroutines.resume
 // id：正数=网易云歌曲 ID；负数=在别的 App 听到、按「歌名|歌手」算出来的本机 ID
 // v=情绪明亮度、e=能量（0~1，AI 打的标签，没打过就是 null）；pic=专辑封面地址（null 没查过，"" 查过没有）
 // src=在哪个 App 听到/同步来的（null=网易云）；nid=对上的网易云 ID（null 没查过，0 没对上）；
-// mid=来源 App 车机接口里的条目 ID；m=开着微光听的时候实测的「活跃度」（越大越激烈）
+// mid=来源 App 车机接口里的条目 ID；m=开着微光听的时候实测的「活跃度」（越大越激烈）；
+// loc=微光自己能放的位置（自建曲库「服务器id:条目id」或 AI 作曲「gen:文件名」）
 data class Song(
     val id: Long, val title: String, val artist: String,
     val v: Float? = null, val e: Float? = null, val pic: String? = null,
     val src: String? = null, val nid: Long? = null, val mid: String? = null, val m: Float? = null,
+    val loc: String? = null,
 ) {
     // 拿歌词、封面、在网易云里点播用的 ID
     fun cloudId(): Long? = if (id > 0) id else nid?.takeIf { it > 0 }
@@ -98,6 +100,7 @@ object Library {
     // 播放会话里的这首歌在曲库里是哪个 ID
     fun idOf(pkg: String, mediaId: String?, title: String, artist: String): Long? {
         if (pkg == Ncm.PKG) return Ncm.songIdOf(mediaId)
+        if (pkg == Local.PKG && mediaId?.startsWith("wg:") == true) mediaId.removePrefix("wg:").toLongOrNull()?.let { return it }
         if (title.isBlank()) return null
         val k = keyOf(title, artist)
         return keys[k] ?: localId(k)
@@ -249,8 +252,9 @@ object Library {
     suspend fun sync(ctx: Context) {
         if (_state.value.syncing) return
         val apps = Players.installed(ctx)
-        if (apps.isEmpty()) { set { it.copy(syncMsg = "还没装音乐 App") }; return }
-        set { it.copy(syncing = true, syncMsg = "连接${apps.first().short}…") }
+        val servers = Sources.servers
+        if (apps.isEmpty() && servers.isEmpty()) { set { it.copy(syncMsg = "还没装音乐 App") }; return }
+        set { it.copy(syncing = true, syncMsg = "开始同步…") }
         val songs = _state.value.songs.toMutableMap()
         val playlists = ArrayList<Playlist>()
         val log = StringBuilder()
@@ -279,6 +283,26 @@ object Library {
                     try { b.disconnect() } catch (_: Throwable) {}
                 }
             }
+            // 自己的曲库服务器
+            for (sv in servers) {
+                set { it.copy(syncMsg = "读取 ${sv.name}…") }
+                val prefix = "${Local.PKG}|${sv.id}:"
+                try {
+                    val data = Sources.fetch(sv)
+                    for ((plid, name, items) in data.lists) {
+                        val ids = items.map { itemSong(songs, it) }.distinct()
+                        if (ids.isNotEmpty()) playlists += Playlist(prefix + plid, name, ids)
+                    }
+                    log.append("【${sv.name}】").append(data.lists.size).append(" 个列表，")
+                        .append(data.lists.lastOrNull()?.third?.size ?: 0).append(" 首\n")
+                    ok++
+                } catch (e: Throwable) {
+                    errs += "${sv.name}：${e.message ?: "读取失败"}"
+                    log.append("【${sv.name}】").append(e.message ?: "读取失败").append('\n')
+                    playlists += _state.value.playlists.filter { it.id.startsWith(prefix) }
+                }
+            }
+            playlists += _state.value.playlists.filter { it.id == GEN }
         } finally {
             val old = _state.value
             set {
@@ -336,6 +360,34 @@ object Library {
             log.append(name).append("：接口给 ").append(ids.size).append(" 首").append(if (keep !== ids) "，保留补全的 ${keep.size} 首" else "").append('\n')
         }
         return out
+    }
+
+    // 自建曲库的歌：曲库里已有同名同歌手的（比如网易云同步来的）就记上微光能放的位置，没有就新建
+    private fun itemSong(songs: MutableMap<Long, Song>, it: Item): Long {
+        val k = keyOf(it.title, it.artist)
+        val id = keys[k] ?: localId(k)
+        val old = songs[id]
+        val song = old?.copy(loc = it.loc, pic = old.pic?.takeIf { p -> p.isNotEmpty() } ?: it.cover)
+            ?: Song(id, it.title, it.artist, pic = it.cover, src = Local.PKG, loc = it.loc)
+        songs[id] = song
+        remember(song)
+        return id
+    }
+
+    // AI 作曲的歌放进「微光作曲」歌单
+    const val GEN = "${Local.PKG}|gen"
+
+    fun addGenerated(title: String, artist: String, file: String): Song {
+        val k = keyOf(title, artist + file)
+        val song = Song(localId(k), title, artist, src = Local.PKG, loc = "gen:$file", nid = 0)
+        val s = _state.value
+        val songs = s.songs.toMutableMap()
+        songs[song.id] = song
+        val old = s.playlists.firstOrNull { it.id == GEN }
+        val pl = Playlist(GEN, "微光作曲", listOf(song.id) + (old?.songIds ?: emptyList()))
+        _state.value = s.copy(songs = songs, playlists = listOf(pl) + s.playlists.filter { it.id != GEN })
+        save()
+        return song
     }
 
     private val mineWords = Regex("我的|收藏|喜欢|歌单|最近|下载|本地|红心|自建")
@@ -464,6 +516,7 @@ object Library {
                         nid = if (s.has("n")) s.optLong("n") else null,
                         mid = if (s.has("d")) s.optString("d") else null,
                         m = if (s.has("m")) s.optDouble("m").toFloat() else null,
+                        loc = if (s.has("l")) s.optString("l") else null,
                     )
                 }
             }
@@ -512,6 +565,7 @@ object Library {
                 if (song.nid != null) put("n", song.nid)
                 if (song.mid != null) put("d", song.mid)
                 if (song.m != null) put("m", song.m.toDouble())
+                if (song.loc != null) put("l", song.loc)
             })
         })
         o.put("playlists", JSONArray().apply {

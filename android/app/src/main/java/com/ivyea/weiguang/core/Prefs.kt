@@ -63,4 +63,34 @@ object Prefs {
     var weather: Boolean
         get() = sp?.getBoolean("weather", false) ?: false
         set(v) { sp?.edit()?.putBoolean("weather", v)?.apply() }
+
+    // 自己的曲库服务器（JSON，见 Sources）
+    var servers: String
+        get() = sp?.getString("servers", "[]") ?: "[]"
+        set(v) { sp?.edit()?.putString("servers", v)?.apply() }
+
+    // 哼唱识别：ACRCloud 项目的地址和密钥
+    var acrHost: String
+        get() = sp?.getString("acrHost", "") ?: ""
+        set(v) { sp?.edit()?.putString("acrHost", v.trim())?.apply() }
+    var acrKey: String
+        get() = sp?.getString("acrKey", "") ?: ""
+        set(v) { sp?.edit()?.putString("acrKey", v.trim())?.apply() }
+    var acrSecret: String
+        get() = sp?.getString("acrSecret", "") ?: ""
+        set(v) { sp?.edit()?.putString("acrSecret", v.trim())?.apply() }
+
+    // AI 作曲：服务商（elevenlabs / minimax）、地址、密钥、模型
+    var genKind: String
+        get() = sp?.getString("genKind", "elevenlabs") ?: "elevenlabs"
+        set(v) { sp?.edit()?.putString("genKind", v)?.apply() }
+    var genBase: String
+        get() = sp?.getString("genBase", "https://api.elevenlabs.io") ?: "https://api.elevenlabs.io"
+        set(v) { sp?.edit()?.putString("genBase", v.trim())?.apply() }
+    var genKey: String
+        get() = sp?.getString("genKey", "") ?: ""
+        set(v) { sp?.edit()?.putString("genKey", v.trim())?.apply() }
+    var genModel: String
+        get() = sp?.getString("genModel", "music_v1") ?: "music_v1"
+        set(v) { sp?.edit()?.putString("genModel", v.trim())?.apply() }
 }
