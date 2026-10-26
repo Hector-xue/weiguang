@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 每晚一首：开了才申请发通知；开机后重新排闹钟 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
         <package android:name="com.netease.cloudmusic" />
@@ -92,7 +95,19 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-            <!-- 分享卡片：缓存目录里的图片交给系统分享面板 -->
+        <!-- 每晚一首：闹钟到点发通知；开机、改时间、升级后重排 -->
+        <receiver
+            android:name=".service.NightlyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 分享卡片：缓存目录里的图片交给系统分享面板 -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.cards"

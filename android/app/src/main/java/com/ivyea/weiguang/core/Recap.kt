@@ -2,9 +2,11 @@ package com.ivyea.weiguang.core
 
 import java.util.Calendar
 
-// 本周听歌回顾：所有音乐 App 合在一起算（这是任何一个音乐 App 自己做不到的），再按听歌习惯起一个「听歌人格」。
+// 听歌回顾（本周 / 本月）：所有音乐 App 合在一起算（这是任何一个音乐 App 自己做不到的），再按听歌习惯起一个「听歌人格」。
 // 只用本机的听歌流水，不上传
 data class Recap(
+    val title: String,
+    val span: String,
     val from: Long,
     val to: Long,
     val plays: Int,
@@ -17,13 +19,32 @@ data class Recap(
     val mood: String?,
     val persona: String,
     val line: String,
+    val days: Int = 0,
 )
 
 object Recaps {
     private const val DAY = 24L * 3600 * 1000
 
-    fun week(now: Long = System.currentTimeMillis()): Recap {
-        val from = now - 7 * DAY
+    fun week(now: Long = System.currentTimeMillis()): Recap = of(now - 7 * DAY, now, "本周听歌", "这周")
+
+    // 本月回顾：月初三天里看上个月整月（上个月听得够多的话），其余时间看这个月到今天
+    fun month(now: Long = System.currentTimeMillis()): Recap {
+        val c = Calendar.getInstance().apply {
+            timeInMillis = now; set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val start = c.timeInMillis
+        val day = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.DAY_OF_MONTH)
+        if (day <= 3) {
+            c.add(Calendar.MONTH, -1)
+            val last = of(c.timeInMillis, start - 1, "${c.get(Calendar.MONTH) + 1}月听歌", "${c.get(Calendar.MONTH) + 1}月")
+            if (last.plays >= 5) return last
+        }
+        val m = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.MONTH) + 1
+        return of(start, now, "${m}月听歌", "这个月")
+    }
+
+    fun of(from: Long, now: Long, title: String, span: String): Recap {
         val st = Library.state.value
         val ps = st.plays.filter { it.at in from..now }
         val songs = st.songs
@@ -55,16 +76,17 @@ object Recaps {
         val bright = if (tagged.size >= 5) tagged.map { it.v!! }.average() else null
 
         val (persona, line) = when {
-            n < 5 -> "刚认识" to "这周才一起听了 $n 首。多陪我听听，下周就能认出你是哪种人"
+            n < 5 -> "刚认识" to "${span}才一起听了 $n 首。多陪我听听，就能认出你是哪种人"
             night >= n * 0.4 -> "夜航人" to "${night * 100 / n}% 的歌在深夜听。夜里的心事，比白天多"
             first != null && firstSong != null && first.value >= maxOf(5, n / 4) -> "单曲循环者" to "《${Meta.short(firstSong.title)}》放了 ${first.value} 遍，它一定替你说了什么"
             topArtist != null && topArtist.second >= n * 0.4 -> "长情的人" to "${topArtist.second * 100 / n}% 的歌是${topArtist.first}。喜欢就一直听"
             art.size >= n * 0.6 -> "漫游者" to "$n 首歌来自 ${art.size} 位歌手，你很少在一个地方停留"
             morning >= n * 0.3 -> "早起的人" to "${morning * 100 / n}% 的歌在清晨听，一天从一首歌开始"
-            bright != null && bright < 0.4 -> "安静的人" to "这周的歌偏暗、偏慢。你可能需要一点时间，我陪着"
-            bright != null && bright > 0.65 -> "发光的人" to "这周的歌都很亮。好心情，接着亮下去"
+            bright != null && bright < 0.4 -> "安静的人" to "${span}的歌偏暗、偏慢。你可能需要一点时间，我陪着"
+            bright != null && bright > 0.65 -> "发光的人" to "${span}的歌都很亮。好心情，接着亮下去"
             else -> "日常派" to "规律地听，像吃饭睡觉一样自然。音乐是你的日常"
         }
-        return Recap(from, now, n, byId.size, art.size, top, topArtist, apps, latest, mood, persona, line)
+        val days = ps.map { c.timeInMillis = it.at; c.get(Calendar.YEAR) * 400 + c.get(Calendar.DAY_OF_YEAR) }.toSet().size
+        return Recap(title, span, from, now, n, byId.size, art.size, top, topArtist, apps, latest, mood, persona, line, days)
     }
 }

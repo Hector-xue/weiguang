@@ -118,6 +118,18 @@ class ShotsTest {
     @Test fun s8_cards() {
         val art = art(0xFF3A3550.toInt(), 0xFFE9A27A.toInt())
         save(com.ivyea.weiguang.core.Card.week(com.ivyea.weiguang.core.Recaps.week(), art), "8_week_card")
+        save(com.ivyea.weiguang.core.Card.week(com.ivyea.weiguang.core.Recaps.month(), art), "10_month_card")
         save(com.ivyea.weiguang.core.Card.lyric("谁在生死两头望", "两不知 (电视剧《XX》插曲)", "南风叙", art), "9_lyric_card")
+    }
+
+    // 每晚一首这一晚会说什么：今天听过歌就是「今天的歌」，写进文件对着看
+    @Test fun s9_nightly() {
+        val n = com.ivyea.weiguang.core.Nightly.compose()
+        org.junit.Assert.assertNotNull(n)
+        java.io.File("build/shots").mkdirs()
+        java.io.File("build/shots/11_nightly.txt").writeText("${n!!.title}\n${n.text}\n${n.open} ${n.play}")
+    }
+    @Test fun s10_recapMonth() = shot("12_recap_month") {
+        com.ivyea.weiguang.ui.RecapSheet(com.ivyea.weiguang.core.Recaps.week(), mood.accent, month0 = true) {}
     }
 }
