@@ -75,6 +75,7 @@ object Free {
 
     // 按心情放：先免费曲库的歌，连不上就放网络电台。返回失败原因
     suspend fun playMood(ctx: Context, m: String = Radio.moodNow()): String? {
+        if (Prefs.zhOnly) return Radio.playChinese(ctx)
         val list = mood(m)
         if (list.isNotEmpty()) return withContext(Dispatchers.Main) { if (play(ctx, list)) null else "微光的播放器没起来" }
         return Radio.play(ctx, m)

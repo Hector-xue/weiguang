@@ -200,7 +200,7 @@ object NowPlaying {
         val prev = _now.value
         _now.value = n
         if (n.songId != null && n.title.isNotEmpty()) {
-            Library.recordPlay(n.songId, n.title, n.artist, n.pkg)
+            Library.recordPlay(n.songId, n.title, n.artist, n.pkg, count = n.playing)
             if (n.playing) Prefs.lastPlayer = n.pkg
             if (n.nid == null) resolve(n.songId, n.title, n.artist, n.durationMs)
         }

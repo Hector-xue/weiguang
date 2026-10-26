@@ -71,6 +71,7 @@ import com.ivyea.weiguang.core.LrcLine
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -84,6 +85,7 @@ import android.os.SystemClock
 import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
+import com.ivyea.weiguang.core.Meta
 import com.ivyea.weiguang.core.Prefs
 import com.ivyea.weiguang.core.Spectrum
 import kotlinx.coroutines.delay
@@ -113,7 +115,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
 
     Box(Modifier.fillMaxSize()) {
     Column(
-        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp).padding(bottom = 92.dp),
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp).padding(bottom = DockH + 6.dp),
     ) {
         TopBar(now)
         if (now == null) {
@@ -152,7 +154,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
             }
         }
         Text(
-            now.title.ifEmpty { "未知歌曲" },
+            Meta.short(now.title).ifEmpty { "未知歌曲" },
             fontFamily = Wg.serif, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink,
             maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),

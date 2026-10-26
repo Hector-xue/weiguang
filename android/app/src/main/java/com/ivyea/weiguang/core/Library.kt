@@ -81,6 +81,9 @@ object Library {
     // 歌名歌手归一：小写、去空白和标点，用来认「是不是同一首」
     fun norm(x: String): String = x.lowercase().filter { it.isLetterOrDigit() }
 
+    private val han = Regex("[\\u4e00-\\u9fff]")
+    fun isZh(s: Song) = han.containsMatchIn(s.title) || han.containsMatchIn(s.artist)
+
     fun keyOf(title: String, artist: String) = norm(title) + "|" + norm(artist.split("/", "、", "&", ",").first())
 
     private val keys = HashMap<String, Long>()
@@ -116,10 +119,19 @@ object Library {
 
     // ---------- 听歌记录 ----------
 
-    fun recordPlay(id: Long, title: String, artist: String, src: String?) {
+    // count=false：只把歌记进曲库（暂停着、刚打开微光时），不算听过一次
+    fun recordPlay(id: Long, title: String, artist: String, src: String?, count: Boolean = true) {
         if (file == null || lastPlayed == id) return
-        lastPlayed = id
         val s = _state.value
+        if (!count) {
+            if (id in s.songs) return
+            val song = Song(id, title, artist, src = src.takeIf { id < 0 })
+            remember(song)
+            _state.value = s.copy(songs = s.songs + (id to song))
+            save()
+            return
+        }
+        lastPlayed = id
         val songs = s.songs.toMutableMap()
         val old = s.songs[id]
         val song = (old ?: Song(id, title, artist, src = src.takeIf { id < 0 }))
@@ -320,14 +332,15 @@ object Library {
             set {
                 it.copy(
                     // 一家都没成功（或被打断）就保留原来的歌单，别清空
-                    songs = songs, playlists = if (ok == 0) old.playlists else playlists, syncing = false,
+                    // 同步期间新听到、新加的歌也留着
+                    songs = it.songs + songs, playlists = if (ok == 0) old.playlists else playlists, syncing = false,
                     syncedAt = if (ok > 0) System.currentTimeMillis() else old.syncedAt,
                     // 有一家成功就不打扰；全失败才把原因摆出来
                     syncMsg = if (ok == 0) errs.joinToString("\n") else "",
                     syncLog = log.toString(),
                 )
             }
-            index(songs)
+            index(_state.value.songs)
             save()
         }
         fillCovers()

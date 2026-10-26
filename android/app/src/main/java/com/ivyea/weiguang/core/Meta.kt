@@ -43,6 +43,17 @@ object Meta {
         return if (Library.norm(sp.first) == Library.norm(title)) sp.second else sp.first
     }
 
+    // 显示用的短歌名：去掉末尾的括号注释，比如「偏爱 (电视剧《仙剑奇侠传三》插曲)」→「偏爱」、「behold the dawn [Remastered]」
+    private val tail = Regex("\\s*[（(【\\[][^（(【\\[]*[）)】\\]]?\\s*$")
+    fun short(t: String): String {
+        var s = t.trim()
+        while (true) {
+            val r = s.replace(tail, "").trim()
+            if (r == s || r.isEmpty()) return s
+            s = r
+        }
+    }
+
     // 旧版存进曲库的脏记录：汽水的「歌词当歌名」直接丢掉（一句歌词一首歌），其余歌手栏去掉专辑
     fun junk(s: Song) = s.id < 0 && s.src == SODA && s.artist.contains("—")
     fun fixArtist(s: Song): Song {

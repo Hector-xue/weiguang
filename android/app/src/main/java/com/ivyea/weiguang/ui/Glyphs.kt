@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 
-enum class G { Play, Pause, Next, Prev, Heart, HeartFill }
+enum class G { Play, Pause, Next, Prev, Heart, HeartFill, More }
 
 // 自绘的几个控制图标（Material 核心图标里没有暂停/切歌）
 @Composable
@@ -23,6 +23,7 @@ fun Glyph(kind: G, color: Color, modifier: Modifier) {
             G.Play -> drawPath(Path().apply {
                 moveTo(w * 0.28f, h * 0.18f); lineTo(w * 0.84f, h * 0.5f); lineTo(w * 0.28f, h * 0.82f); close()
             }, color)
+            G.More -> for (i in 0 until 3) drawCircle(color, w * 0.075f, Offset(w * (0.25f + i * 0.25f), h * 0.5f))
             G.Pause -> {
                 val bw = w * 0.2f; val cr = CornerRadius(bw * 0.35f)
                 drawRoundRect(color, Offset(w * 0.24f, h * 0.18f), Size(bw, h * 0.64f), cr)

@@ -91,6 +91,14 @@ object Radio {
     fun play(ctx: Context, list: List<Station>, start: Int, label: String = "电台"): Boolean =
         Local.play(ctx, list.map { song(it, label) }, start)
 
+    // 只听中文：放中文音乐台
+    suspend fun playChinese(ctx: Context): String? {
+        val list = chinese()
+        if (list.isEmpty()) return "电台目录连不上"
+        val pick = list.take(12).shuffled()
+        return withContext(Dispatchers.Main) { if (Local.play(ctx, pick.map { song(it, "中文") })) null else "微光的播放器没起来" }
+    }
+
     // 放一个这种心情的台；失败返回原因
     suspend fun play(ctx: Context, mood: String = moodNow()): String? {
         val list = stations(mood)

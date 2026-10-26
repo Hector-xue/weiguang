@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -74,6 +76,7 @@ import com.ivyea.weiguang.core.Song
 import com.ivyea.weiguang.core.rememberArt
 import com.ivyea.weiguang.core.Library
 import com.ivyea.weiguang.core.Msg
+import com.ivyea.weiguang.core.Meta
 import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
@@ -87,7 +90,10 @@ private val suggestions = listOf("来点安静的", "想听点开心的", "有�
 fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () -> Unit, onOpenSettings: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val msgs by Buddy.msgs.collectAsState()
+    val all by Buddy.msgs.collectAsState()
+    val open by Buddy.open.collectAsState()
+    // 上次的对话：这次还没聊就先不摊开
+    val msgs = if (open) all else emptyList()
     val busy by Buddy.busy.collectAsState()
     val thought by Buddy.thought.collectAsState()
     val radio by Buddy.radio.collectAsState()
@@ -99,8 +105,10 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     LaunchedEffect(msgs.size, busy) { if (msgs.isNotEmpty()) list.animateScrollToItem(msgs.size + (if (busy) 1 else 0)) }
 
     var sheet by rememberSaveable { mutableStateOf("") }
+    // 聊着的时候按返回：收起对话回到首页（记录还在）
+    androidx.activity.compose.BackHandler(enabled = open && all.isNotEmpty() && sheet.isEmpty()) { Buddy.collapse() }
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 22.dp).padding(bottom = 92.dp)) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding().padding(horizontal = 22.dp).padding(bottom = DockH)) {
         // 顶栏：时段 + 在听哪个 App；开着电台时一个小标签；聊起来以后能清空
         Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(daypart(), fontSize = 13.sp, color = Wg.ink2)
@@ -120,7 +128,11 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
                     Text("${f.name}电台 · 停", fontSize = 12.sp, color = Wg.ink2, modifier = Modifier.padding(start = 6.dp))
                 }
             }
-            if (msgs.isNotEmpty()) Text("清空", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.clickable { Buddy.clearChat() }.padding(6.dp))
+            if (msgs.isNotEmpty()) Text("清空", fontSize = 13.sp, color = Wg.ink3, modifier = Modifier.clip(RoundedCornerShape(999.dp)).clickable { Buddy.clearChat() }.padding(horizontal = 8.dp, vertical = 6.dp))
+            // 设置入口：不常用，收成右上角三个小点
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onOpenSettings), contentAlignment = Alignment.Center) {
+                Glyph(G.More, Wg.ink3, Modifier.size(20.dp))
+            }
         }
 
         // 光球 + 微光的心里话（宋体大字）；聊起来以后收成一行，把位置让给对话
@@ -160,12 +172,15 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
 
         if (now != null) MiniPlayer(now, accent, onOpenPlayer)
 
+        // 上下边缘渐隐：滚上去、滚到输入框边上都是慢慢淡掉
         LazyColumn(
-            Modifier.fillMaxWidth().weight(1f).padding(top = 10.dp),
+            Modifier.fillMaxWidth().weight(1f).fadeEdges(top = 22.dp, bottom = 26.dp),
             state = list,
+            contentPadding = PaddingValues(top = 22.dp, bottom = 22.dp),
             verticalArrangement = Arrangement.spacedBy(if (msgs.isEmpty()) 26.dp else 10.dp),
         ) {
             if (msgs.isEmpty()) {
+                if (all.isNotEmpty()) item { Resume(all.last(), accent) { Buddy.reopen() } }
                 item { FeelCard { f -> scope.launch { Buddy.feel(f) } } }
                 item { MakeRow(onHum = { sheet = "hum" }, onGen = { sheet = "gen" }) }
                 item { Habit(accent) }
@@ -175,7 +190,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
         }
 
         if (!busy && msgs.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().fadeEnd(36.dp).horizontalScroll(rememberScrollState()).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     "✦ 作一首", fontSize = 12.5.sp, color = Color.White,
                     modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Wg.lav)
@@ -229,6 +244,22 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     }
 }
 
+// 上次聊到哪：一行，点开接着聊
+@Composable
+private fun Resume(last: Msg, accent: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(accent))
+        Text(
+            "上次聊到：" + last.text, fontSize = 13.sp, color = Wg.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 10.dp),
+        )
+        Text("接着聊 →", fontSize = 13.sp, color = accent, modifier = Modifier.padding(start = 10.dp))
+    }
+}
+
 // 正在放的歌：封面 + 宋体歌名 + 当前这句歌词，底下一道细细的进度光
 @Composable
 private fun MiniPlayer(now: Now, accent: Color, onOpen: () -> Unit) {
@@ -245,7 +276,7 @@ private fun MiniPlayer(now: Now, accent: Color, onOpen: () -> Unit) {
                 if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                Text(now.title, fontFamily = Wg.serif, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(Meta.short(now.title), fontFamily = Wg.serif, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val lyric = Buddy.isLyric(now.lyric)
                 Text(
                     if (lyric) now.lyric!! else now.artist,
@@ -287,7 +318,7 @@ private fun Bubble(m: Msg, accent: Color) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Thumb(s, 30)
-                        Text(s.title, fontSize = 13.5.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp).weight(1f, fill = false))
+                        Text(Meta.short(s.title), fontSize = 13.5.sp, color = Wg.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp).weight(1f, fill = false))
                         if (s.artist.isNotEmpty()) Text(" · ${s.artist}", fontSize = 12.sp, color = Wg.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
