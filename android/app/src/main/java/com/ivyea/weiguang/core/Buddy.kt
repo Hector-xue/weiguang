@@ -47,7 +47,41 @@ object Buddy {
     private val _thought = MutableStateFlow<String?>(null)
     val thought: StateFlow<String?> = _thought
 
-    internal fun preview(msgs: List<Msg>, thought: String?) { _msgs.value = msgs; _thought.value = thought }
+    internal fun preview(msgs: List<Msg>, thought: String?) { _msgs.value = msgs; _thought.value = thought; _open.value = msgs.isNotEmpty() }
+
+    // 这次打开以后聊过没有：没聊过时首页照常显示，上次的对话收成一行「接着聊」
+    private val _open = MutableStateFlow(false)
+    val open: StateFlow<Boolean> = _open
+    fun reopen() { _open.value = true }
+    fun collapse() { _open.value = false }
+
+    // 对话存在手机里（最近 120 条），退出再打开还在；「清空」才删
+    private var chatFile: java.io.File? = null
+
+    fun init(ctx: Context) {
+        if (chatFile != null) return
+        val f = java.io.File(ctx.filesDir, "chat.json")
+        chatFile = f
+        try {
+            if (!f.exists()) return
+            val a = org.json.JSONArray(f.readText())
+            _msgs.value = List(a.length()) { i ->
+                val o = a.getJSONObject(i)
+                val ids = o.optJSONArray("s")
+                Msg(o.optBoolean("me"), o.optString("t"), if (ids == null) emptyList() else List(ids.length()) { ids.getLong(it) }, o.optString("f").ifEmpty { null })
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun saveChat() {
+        val f = chatFile ?: return
+        val a = org.json.JSONArray()
+        _msgs.value.takeLast(120).forEach { m ->
+            a.put(org.json.JSONObject().put("me", m.me).put("t", m.text).put("s", org.json.JSONArray(m.songs)).put("f", m.feel ?: ""))
+        }
+        val text = a.toString()
+        Thread { try { f.writeText(text) } catch (_: Throwable) {} }.start()
+    }
     private var thoughtKey = ""
 
     private val _tagMsg = MutableStateFlow("")
@@ -86,14 +120,43 @@ object Buddy {
         return "$w${Players.nameOf(n.pkg)}正在${if (n.playing) "放" else "暂停在"}《${n.title}》- ${n.artist}。"
     }
 
-    // 候选：最近听过的在前，再补歌单里的
+    // 候选：最近听过的在前，再补歌单里的；免费曲库（Audius，几乎全是英文独立音乐）的排到最后；
+    // 说过只听中文就只留中文歌
     private fun candidates(limit: Int = 300): List<Song> {
         val s = Library.state.value
         val ids = LinkedHashSet<Long>()
         s.history.forEach { ids += it.id }
         s.playlists.forEach { p -> p.songIds.forEach { ids += it } }
-        return ids.mapNotNull { s.songs[it] }.filter { it.title.isNotEmpty() }.take(limit)
+        val all = ids.mapNotNull { s.songs[it] }.filter { it.title.isNotEmpty() && ok(it) }
+        val (free, mine) = all.partition { it.loc?.startsWith("url:") == true }
+        return (mine + free).take(limit)
     }
+
+    private fun ok(s: Song) = !Prefs.zhOnly || Library.isZh(s)
+
+    // 对话里说到语言偏好：记下来，返回要回的话
+    private val noForeign = Regex("(听不懂|不要|不想听|别放|少放|不听|不喜欢)[^，。,.]{0,4}(英文|英语|外语|欧美|外国)|(只听|只要|只放|换成|来点|放点?)[^，。,.]{0,3}(中文|华语|国语)")
+    private val yesForeign = Regex("(英文|英语|欧美|外语)[^，。,.]{0,3}(也行|也可以|也听|可以|来点|想听)|(来点|放点?|想听)[^，。,.]{0,3}(英文|英语|欧美)")
+
+    private fun langPref(t: String): String? = when {
+        noForeign.containsMatchIn(t) -> { Prefs.zhOnly = true; "记住了，以后只给你挑中文歌。" }
+        yesForeign.containsMatchIn(t) && Prefs.zhOnly -> { Prefs.zhOnly = false; "好，英文歌也放回来了。" }
+        else -> null
+    }
+
+    // 没 AI 时听懂几个常见的心情词
+    private val moodWords = listOf(
+        "平静" to Regex("安静|静一静|轻一点|轻柔|舒缓|放松|助眠|睡"),
+        "开心" to Regex("开心|快乐|高兴|轻快|欢快|甜"),
+        "疲惫" to Regex("累|困|疲|乏"),
+        "低落" to Regex("难过|伤心|低落|emo|失恋|丧|心情不好"),
+        "烦躁" to Regex("烦|躁|生气|火大"),
+        "想哭" to Regex("哭"),
+        "专注" to Regex("专心|专注|学习|工作|写作业|看书"),
+        "想燃" to Regex("燃|嗨|运动|跑步|健身|动感|劲爆"),
+    )
+
+    private fun feelOf(t: String): Feel? = moodWords.firstOrNull { it.second.containsMatchIn(t) }?.let { (n, _) -> Feels.firstOrNull { it.name == n } }
 
     // 最常听的几位歌手
     fun taste(n: Int = 6): List<String> {
@@ -129,6 +192,7 @@ object Buddy {
 
     suspend fun feel(f: Feel) {
         if (_busy.value) return
+        _open.value = true
         _msgs.value = _msgs.value + Msg(true, f.say)
         _busy.value = true
         Diary.logMood(f.name)
@@ -150,6 +214,7 @@ object Buddy {
             _msgs.value = _msgs.value + Msg(false, "${e.message}。", localPick(f.say), f.name)
         } finally {
             _busy.value = false
+            saveChat()
         }
     }
 
@@ -158,7 +223,7 @@ object Buddy {
     private class Star(val id: Long, val v: Float, val e: Float)
 
     private fun tagged(): List<Star> = Library.state.value.songs.values
-        .filter { it.v != null && it.e != null && it.title.isNotEmpty() }
+        .filter { it.v != null && it.e != null && it.title.isNotEmpty() && ok(it) }
         .map { Star(it.id, it.v!!, Library.energy(it) ?: it.e!!) }
 
     private fun d2(s: Star, v: Float, e: Float) = (s.v - v) * (s.v - v) + (s.e - e) * (s.e - e)
@@ -190,22 +255,26 @@ object Buddy {
     suspend fun ask(text: String) {
         val t = text.trim()
         if (t.isEmpty() || _busy.value) return
+        _open.value = true
         _msgs.value = _msgs.value + Msg(true, t)
         _busy.value = true
         try {
-            _msgs.value = _msgs.value + (if (Ai.ready) askAi(t) else askLocal(t))
+            val said = langPref(t)
+            val m = if (Ai.ready) askAi(t) else askLocal(t)
+            _msgs.value = _msgs.value + (if (said != null) m.copy(text = said + if (m.songs.isNotEmpty()) "先听这几首：" else "") else m)
         } catch (e: Ai.AiError) {
             val picks = localPick(t)
             _msgs.value = _msgs.value + Msg(false, "${e.message}。" + if (picks.isNotEmpty()) "先凭直觉给你挑几首：" else "", picks)
         } finally {
             _busy.value = false
+            saveChat()
         }
     }
 
     private suspend fun askAi(text: String, max: Int = 5): Msg {
         val cand = candidates()
         val system = """
-            你是「微光」，陪用户听歌的${persona()}。用户用${apps()}听歌。
+            你是「微光」，陪用户听歌的${persona()}。用户用${apps()}听歌。${if (Prefs.zhOnly) "用户听不懂外语歌，只挑中文歌。" else ""}
             需要推荐歌时，只能从「候选歌曲」里挑，用它的 id，绝不编造列表外的歌。
             只回复一个 JSON：{"reply":"一两句中文回应，不超过40字","songs":[按推荐顺序的 id，最多$max 个]}
             结合用户的口味、习惯、此刻的时间和天气来挑，像一个了解用户的老朋友。
@@ -234,24 +303,30 @@ object Buddy {
 
     private fun askLocal(text: String): Msg {
         val picks = localPick(text)
+        val f = feelOf(text)
         val reply = when {
             candidates().isEmpty() -> "曲库还是空的，先去「曲库」同步一下歌单吧。"
             picks.isEmpty() -> "曲库里没找到合适的。"
-            else -> "按你说的挑了几首。在设置里填上 AI 密钥，我会更懂你。"
+            f != null -> f.reply
+            else -> "按你说的挑了几首。"
         }
-        return Msg(false, reply, picks)
+        return Msg(false, reply, picks, f?.name)
     }
 
-    // 没有 AI 时的直觉：歌名/歌手里有用户说的词就挑它，否则从最近常听的里随机
+    // 没有 AI 时的直觉：歌名/歌手里有用户说的词就挑它；说了心情就按星图挑；否则从最近常听的里随机
     private fun localPick(text: String): List<Long> {
         val cand = candidates()
         if (cand.isEmpty()) return emptyList()
         val words = text.split(Regex("[\\s，。！？,.!?、]+")).filter { it.length >= 2 }
         val hit = cand.filter { s -> words.any { w -> s.title.contains(w, true) || s.artist.contains(w, true) } }
-        return (if (hit.isNotEmpty()) hit else cand.take(40).shuffled()).take(3).map { it.id }
+        if (hit.isNotEmpty()) return hit.take(5).map { it.id }
+        val f = feelOf(text)
+        val stars = tagged()
+        if (f != null && stars.size >= 20) return walk(stars, f, 8)
+        return cand.take(40).shuffled().take(5).map { it.id }
     }
 
-    fun clearChat() { _msgs.value = emptyList() }
+    fun clearChat() { _msgs.value = emptyList(); _open.value = false; saveChat() }
 
     // ---------- 此刻的一句话 ----------
 

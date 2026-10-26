@@ -24,13 +24,14 @@ class MainActivity : ComponentActivity() {
         Prefs.init(this)
         Library.init(this)
         com.ivyea.weiguang.core.Diary.init(this)
+        com.ivyea.weiguang.core.Buddy.init(this)
         com.ivyea.weiguang.core.Sources.init(filesDir)
         if (com.ivyea.weiguang.core.Sources.servers.isEmpty()) com.ivyea.weiguang.core.Sources.load()
         com.ivyea.weiguang.core.Art.init(this)
         setContent { WeiguangTheme { App() } }
         if (savedInstanceState == null) {
             NowPlaying.attach(this)
-            com.ivyea.weiguang.core.Players.autoStart(this)
+            if (com.ivyea.weiguang.ui.listenerEnabled(this)) com.ivyea.weiguang.core.Players.autoStart(this)
         }
     }
 

@@ -28,6 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -80,6 +84,32 @@ fun Hair(modifier: Modifier = Modifier) {
 }
 
 // 玻璃卡片：半透明白 + 白色发丝边 + 很淡的投影（不做真模糊，省性能）。投影压得很低，靠留白和发丝边撑质感
+// 上下边缘渐隐：滚动内容在这里慢慢淡出，不是一刀切
+fun Modifier.fadeEdges(top: Dp, bottom: Dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val h = size.height
+        if (h <= 0f) return@drawWithContent
+        val t = (top.toPx() / h).coerceIn(0f, 0.5f)
+        val b = (bottom.toPx() / h).coerceIn(0f, 0.5f)
+        drawRect(
+            Brush.verticalGradient(0f to Color.Transparent, t to Color.Black, 1f - b to Color.Black, 1f to Color.Transparent),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
+// 右边缘渐隐：横向滑动的一排标签，露出一半的那个慢慢淡掉
+fun Modifier.fadeEnd(width: Dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val w = size.width
+        if (w <= 0f) return@drawWithContent
+        val e = (width.toPx() / w).coerceIn(0f, 0.5f)
+        drawRect(Brush.horizontalGradient(0f to Color.Black, 1f - e to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+    }
+
 fun Modifier.glass(radius: Dp = 22.dp, elevation: Dp = 10.dp): Modifier {
     val shape = RoundedCornerShape(radius)
     return this

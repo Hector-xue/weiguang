@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -54,20 +55,20 @@ import kotlinx.coroutines.launch
 
 // 浮在页面上的底部卡片
 @Composable
-private fun Sheet(onClose: () -> Unit, content: @Composable () -> Unit) {
+internal fun Sheet(onClose: () -> Unit, content: @Composable () -> Unit) {
     Box(
         Modifier.fillMaxSize().background(Color(0x33342F55)).clickable(onClick = onClose),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 104.dp).glass(24.dp, 16.dp)
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = DockH + 8.dp).glass(24.dp, 16.dp)
                 .background(Color.White.copy(alpha = 0.6f)).clickable(enabled = false) {}.padding(20.dp),
         ) { content() }
     }
 }
 
 @Composable
-private fun Pill(text: String, on: Boolean = true, color: Color = Wg.warm, onClick: () -> Unit) {
+internal fun Pill(text: String, on: Boolean = true, color: Color = Wg.warm, onClick: () -> Unit) {
     Text(
         text, fontSize = 13.sp, color = if (on) Color.White else Wg.ink2,
         modifier = Modifier.clip(RoundedCornerShape(999.dp))

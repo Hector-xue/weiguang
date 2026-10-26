@@ -109,4 +109,15 @@ class ShotsTest {
         NowPlaying.preview(null)
         shot("7_moment_idle") { screen(0) }
     }
+
+    // 分享卡片直接存图
+    private fun save(b: Bitmap, name: String) {
+        java.io.File("build/shots").mkdirs()
+        java.io.FileOutputStream("build/shots/$name.png").use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+    @Test fun s8_cards() {
+        val art = art(0xFF3A3550.toInt(), 0xFFE9A27A.toInt())
+        save(com.ivyea.weiguang.core.Card.week(com.ivyea.weiguang.core.Recaps.week(), art), "8_week_card")
+        save(com.ivyea.weiguang.core.Card.lyric("谁在生死两头望", "两不知 (电视剧《XX》插曲)", "南风叙", art), "9_lyric_card")
+    }
 }

@@ -126,24 +126,32 @@ internal fun Shell(tab: Int, listenerOn: Boolean, now: Now?, lib: LibState, m: M
     }
 }
 
-// 底栏：一条轻玻璃，选中的字变深、下面亮一颗光点
+// 底栏高度（不含系统导航条）；各页底部按它留白
+internal val DockH = 54.dp
+
+// 底栏：不再是一颗胶囊，只是贴底的三个字，背后一层从透明到纸白的渐隐，内容滑到这里慢慢淡掉。
+// 设置不常用，不占底栏，从「此刻」右上角的 ··· 进
 @Composable
 private fun Dock(tab: Int, modifier: Modifier, onTab: (Int) -> Unit) {
-    Row(
-        modifier.navigationBarsPadding().padding(bottom = 12.dp).glass(999.dp, 18.dp)
-            .background(Color.White.copy(alpha = 0.35f)).padding(horizontal = 8.dp, vertical = 4.dp),
+    Box(
+        modifier.fillMaxWidth()
+            .background(Brush.verticalGradient(0f to Wg.paper.copy(alpha = 0f), 0.45f to Wg.paper.copy(alpha = 0.82f), 1f to Wg.paper.copy(alpha = 0.95f)))
+            .navigationBarsPadding().height(DockH),
+        contentAlignment = Alignment.Center,
     ) {
-        listOf("此刻", "播放", "曲库", "设置").forEachIndexed { i, label ->
-            val sel = i == tab
-            Column(
-                Modifier.clip(RoundedCornerShape(999.dp)).clickable { onTab(i) }.padding(horizontal = 18.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(label, fontSize = 14.5.sp, color = if (sel) Wg.ink else Wg.ink3, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
-                Box(
-                    Modifier.padding(top = 4.dp).size(4.dp).clip(CircleShape)
-                        .background(if (sel) Wg.warm else Color.Transparent),
-                )
+        Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+            listOf("此刻", "播放", "曲库").forEachIndexed { i, label ->
+                val sel = i == tab
+                Column(
+                    Modifier.clip(RoundedCornerShape(999.dp)).clickable { onTab(i) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(label, fontSize = 14.5.sp, color = if (sel) Wg.ink else Wg.ink3, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                    Box(
+                        Modifier.padding(top = 4.dp).size(4.dp).clip(CircleShape)
+                            .background(if (sel) Wg.warm else Color.Transparent),
+                    )
+                }
             }
         }
     }

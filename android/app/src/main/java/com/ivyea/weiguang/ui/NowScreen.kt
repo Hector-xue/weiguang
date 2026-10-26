@@ -71,6 +71,7 @@ import com.ivyea.weiguang.core.LrcLine
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -84,6 +85,8 @@ import android.os.SystemClock
 import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
+import com.ivyea.weiguang.core.Meta
+import com.ivyea.weiguang.core.Card
 import com.ivyea.weiguang.core.Prefs
 import com.ivyea.weiguang.core.Spectrum
 import kotlinx.coroutines.delay
@@ -113,7 +116,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
 
     Box(Modifier.fillMaxSize()) {
     Column(
-        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 22.dp).padding(bottom = 92.dp),
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp).padding(bottom = DockH + 6.dp),
     ) {
         TopBar(now)
         if (now == null) {
@@ -152,7 +155,7 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
             }
         }
         Text(
-            now.title.ifEmpty { "未知歌曲" },
+            Meta.short(now.title).ifEmpty { "未知歌曲" },
             fontFamily = Wg.serif, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Wg.ink,
             maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -177,7 +180,14 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         }
         Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
             if (Buddy.isLyric(cur)) {
-                Text("✦ 解读这句", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable { onExplain(cur!!, lines?.getOrNull(idx)?.t) }.padding(horizontal = 10.dp, vertical = 4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("✦ 解读这句", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable { onExplain(cur!!, lines?.getOrNull(idx)?.t) }.padding(horizontal = 10.dp, vertical = 4.dp))
+                    Box(Modifier.size(3.dp).clip(CircleShape).background(Wg.ink3.copy(alpha = 0.5f)))
+                    // 这句做成一张卡片发出去
+                    Text("做成卡片", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable {
+                        Card.share(ctx, Card.lyric(cur!!, now.title, now.artist, now.art), "lyric")
+                    }.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
             }
         }
         Progress(now, mood.accent)

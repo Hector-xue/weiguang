@@ -65,6 +65,11 @@ object Prefs {
         get() = sp?.getString("radioFav", "[]") ?: "[]"
         set(v) { sp?.edit()?.putString("radioFav", v)?.apply() }
 
+    // 只听中文歌：对话里说过「听不懂英文歌」之类就记下，挑歌、电台都只挑中文
+    var zhOnly: Boolean
+        get() = sp?.getBoolean("zhOnly", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("zhOnly", v)?.apply() }
+
     var autoplay: Boolean
         get() = sp?.getBoolean("autoplay", true) ?: true
         set(v) { sp?.edit()?.putBoolean("autoplay", v)?.apply() }
