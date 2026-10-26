@@ -70,7 +70,7 @@ object Nightly {
             .firstNotNullOfOrNull { e -> st.songs[e.key]?.takeIf { it.title.isNotEmpty() }?.let { it to e.value } }
         if (top != null) {
             val (s, n) = top
-            val t = if (n >= 2) "今天听了 ${ps.size} 首，它放了 $n 遍。睡前再听一次？" else "今天听了 ${ps.size} 首，就它最像今天。"
+            val t = if (n >= 2) "今天听了 ${ps.size} 首，它放了 $n 遍。睡前再听一次？" else "今天听了 ${ps.size} 首，睡前用它收个尾？"
             return Note("今天的歌：《${Meta.short(s.title)}》", t, "moment", s.id)
         }
 
