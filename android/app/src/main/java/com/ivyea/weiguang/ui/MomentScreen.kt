@@ -92,6 +92,8 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     val scope = rememberCoroutineScope()
     val all by Buddy.msgs.collectAsState()
     val open by Buddy.open.collectAsState()
+    val libPlays = Library.state.collectAsState().value.plays.size
+    val recap = remember(libPlays / 5) { com.ivyea.weiguang.core.Recaps.week() }
     // 上次的对话：这次还没聊就先不摊开
     val msgs = if (open) all else emptyList()
     val busy by Buddy.busy.collectAsState()
@@ -182,6 +184,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
             if (msgs.isEmpty()) {
                 if (all.isNotEmpty()) item { Resume(all.last(), accent) { Buddy.reopen() } }
                 item { FeelCard { f -> scope.launch { Buddy.feel(f) } } }
+                if (recap.plays >= 5) item { RecapRow(recap, accent) { sheet = "recap" } }
                 item { MakeRow(onHum = { sheet = "hum" }, onGen = { sheet = "gen" }) }
                 item { Habit(accent) }
             }
@@ -239,6 +242,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     }
     when (sheet) {
         "hum" -> HumSheet(time, accent, { sheet = "" }, onOpenSettings)
+        "recap" -> RecapSheet(recap, accent) { sheet = "" }
         "gen" -> GenSheet(time, accent, Buddy.radio.value?.say ?: msgs.lastOrNull { it.me }?.text ?: "", { sheet = "" }, onOpenSettings)
     }
     }

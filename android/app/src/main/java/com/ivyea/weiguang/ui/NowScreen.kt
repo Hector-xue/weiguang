@@ -86,6 +86,7 @@ import com.ivyea.weiguang.core.Players
 import com.ivyea.weiguang.core.Now
 import com.ivyea.weiguang.core.NowPlaying
 import com.ivyea.weiguang.core.Meta
+import com.ivyea.weiguang.core.Card
 import com.ivyea.weiguang.core.Prefs
 import com.ivyea.weiguang.core.Spectrum
 import kotlinx.coroutines.delay
@@ -179,7 +180,14 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         }
         Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
             if (Buddy.isLyric(cur)) {
-                Text("✦ 解读这句", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable { onExplain(cur!!, lines?.getOrNull(idx)?.t) }.padding(horizontal = 10.dp, vertical = 4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("✦ 解读这句", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable { onExplain(cur!!, lines?.getOrNull(idx)?.t) }.padding(horizontal = 10.dp, vertical = 4.dp))
+                    Box(Modifier.size(3.dp).clip(CircleShape).background(Wg.ink3.copy(alpha = 0.5f)))
+                    // 这句做成一张卡片发出去
+                    Text("做成卡片", fontSize = 12.sp, color = Wg.lav, modifier = Modifier.clickable {
+                        Card.share(ctx, Card.lyric(cur!!, now.title, now.artist, now.art), "lyric")
+                    }.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
             }
         }
         Progress(now, mood.accent)
