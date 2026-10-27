@@ -117,7 +117,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     // 聊着的时候按返回：收起对话回到首页（记录还在）
     androidx.activity.compose.BackHandler(enabled = open && all.isNotEmpty() && sheet.isEmpty()) { Buddy.collapse() }
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding().padding(horizontal = 22.dp).padding(bottom = DockH)) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding().padding(horizontal = 22.dp).padding(bottom = DockH + 6.dp)) {
         // 顶栏：时段 + 在听哪个 App；开着电台时一个小标签；聊起来以后能清空
         Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(daypart(), fontSize = 13.sp, color = Wg.ink2)
