@@ -159,8 +159,9 @@ private fun Dock(tab: Int, accent: Color, modifier: Modifier, onTab: (Int) -> Un
     val x by animateDpAsState(slot * tab, spring(dampingRatio = 0.62f, stiffness = 320f), label = "glow")
     Box(
         modifier.fillMaxWidth()
-            .background(Brush.verticalGradient(0f to Wg.paper.copy(alpha = 0f), 0.5f to Wg.paper.copy(alpha = 0.78f), 1f to Wg.paper.copy(alpha = 0.94f)))
-            .navigationBarsPadding().height(DockH),
+            // 渐隐从图标上方 26dp 就开始，到图标这一带已经几乎是纸白：封面滑到底下也不会透出来跟图标打架
+            .background(Brush.verticalGradient(0f to Wg.paper.copy(alpha = 0f), 0.3f to Wg.paper.copy(alpha = 0.88f), 0.55f to Wg.paper.copy(alpha = 0.97f), 1f to Wg.paper))
+            .padding(top = 26.dp).navigationBarsPadding().height(DockH),
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.width(slot * tabs.size).fillMaxHeight()) {
