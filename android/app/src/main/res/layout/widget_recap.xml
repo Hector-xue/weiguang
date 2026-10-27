@@ -52,10 +52,11 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <View
+        <!-- 小组件里不能用普通 View，圆点用 ImageView 画 -->
+        <ImageView
             android:layout_width="6dp"
             android:layout_height="6dp"
-            android:background="@drawable/r_dot" />
+            android:src="@drawable/r_dot" />
 
         <TextView
             android:id="@+id/r_stat"
