@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 
-enum class G { Play, Pause, Next, Prev, Heart, HeartFill, More }
+enum class G { Play, Pause, Next, Prev, Heart, HeartFill, More, Spark, Disc, Stack, Back }
 
 // 自绘的几个控制图标（Material 核心图标里没有暂停/切歌）
 @Composable
@@ -23,6 +23,24 @@ fun Glyph(kind: G, color: Color, modifier: Modifier) {
             G.Play -> drawPath(Path().apply {
                 moveTo(w * 0.28f, h * 0.18f); lineTo(w * 0.84f, h * 0.5f); lineTo(w * 0.28f, h * 0.82f); close()
             }, color)
+            // 底栏三枚：此刻=一颗四角星光，播放=一张唱片，曲库=三本立着的书
+            G.Spark -> drawPath(Path().apply {
+                val c = w * 0.5f; val r = w * 0.4f; val k = w * 0.07f
+                moveTo(c, c - r); quadraticTo(c + k, c - k, c + r, c); quadraticTo(c + k, c + k, c, c + r)
+                quadraticTo(c - k, c + k, c - r, c); quadraticTo(c - k, c - k, c, c - r); close()
+            }, color, style = Stroke(w * 0.075f, join = StrokeJoin.Round))
+            G.Disc -> {
+                drawCircle(color, w * 0.36f, Offset(w * 0.5f, h * 0.5f), style = Stroke(w * 0.075f))
+                drawCircle(color, w * 0.09f, Offset(w * 0.5f, h * 0.5f))
+            }
+            G.Stack -> {
+                val sw = Stroke(w * 0.075f, cap = StrokeCap.Round)
+                drawLine(color, Offset(w * 0.24f, h * 0.2f), Offset(w * 0.24f, h * 0.8f), sw.width, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.44f, h * 0.28f), Offset(w * 0.44f, h * 0.8f), sw.width, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.62f, h * 0.24f), Offset(w * 0.8f, h * 0.78f), sw.width, StrokeCap.Round)
+            }
+            G.Back -> drawPath(Path().apply { moveTo(w * 0.6f, h * 0.22f); lineTo(w * 0.32f, h * 0.5f); lineTo(w * 0.6f, h * 0.78f) },
+                color, style = Stroke(w * 0.085f, cap = StrokeCap.Round, join = StrokeJoin.Round))
             G.More -> for (i in 0 until 3) drawCircle(color, w * 0.075f, Offset(w * (0.25f + i * 0.25f), h * 0.5f))
             G.Pause -> {
                 val bw = w * 0.2f; val cr = CornerRadius(bw * 0.35f)

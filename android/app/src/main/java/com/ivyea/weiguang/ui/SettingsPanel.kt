@@ -7,6 +7,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.BasicTextField
@@ -65,7 +66,7 @@ import com.ivyea.weiguang.core.Weather
 import com.ivyea.weiguang.service.NowListener
 
 @Composable
-fun SettingsPage() {
+fun SettingsPage(onBack: () -> Unit = {}) {
     val ctx = LocalContext.current
     val tick = rememberResumeTick()
     var spectrum by remember { mutableStateOf(Prefs.spectrum) }
@@ -98,9 +99,12 @@ fun SettingsPage() {
 
     Column(
         Modifier.fillMaxSize().statusBarsPadding()
-            .verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 120.dp),
+            .verticalScroll(rememberScrollState()).navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 32.dp),
     ) {
-        PageTitle("设置")
+        Box(Modifier.offset(x = (-10).dp).size(40.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+            Glyph(G.Back, Wg.ink2, Modifier.size(22.dp))
+        }
+        PageTitle("设置", Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(20.dp))
 
         Column(Modifier.fillMaxWidth().glass(22.dp, 6.dp)) {

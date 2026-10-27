@@ -195,12 +195,13 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
         Controls(now, mood.accent) { Players.openApp(ctx, now.pkg) }
     }
     sheetLine?.let { line ->
+        androidx.activity.compose.BackHandler { sheetLine = null }
         Box(
             Modifier.fillMaxSize().background(Color(0x33342F55)).clickable { sheetLine = null },
             contentAlignment = Alignment.BottomCenter,
         ) {
             Column(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 104.dp).glass(24.dp, 16.dp)
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = DockH + 8.dp).glass(24.dp, 16.dp)
                     .background(Color.White.copy(alpha = 0.6f)).clickable(enabled = false) {}.padding(20.dp),
             ) {
                 Text("「$line」", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = mood.accent, lineHeight = 24.sp)
@@ -208,11 +209,19 @@ fun NowScreen(now: Now?, mood: Mood, time: State<Float>) {
                     sheetText ?: "微光在想…", fontSize = 14.sp, color = if (sheetText == null) Wg.ink3 else Wg.ink, lineHeight = 22.sp,
                     modifier = Modifier.padding(top = 12.dp),
                 )
-                sheetAt?.let { at ->
-                    Text(
-                        "从这句开始放", fontSize = 13.sp, color = mood.accent, fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(top = 14.dp).clip(RoundedCornerShape(999.dp)).background(mood.accent.copy(alpha = 0.12f))
-                            .clickable { NowPlaying.seekTo(at); sheetLine = null }.padding(horizontal = 14.dp, vertical = 7.dp),
+                // 哪一句都能做成卡片：整首歌词里点任意一句就到这儿
+                Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    sheetAt?.let { at ->
+                        Text(
+                            "从这句开始放", fontSize = 13.sp, color = mood.accent, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(mood.accent.copy(alpha = 0.12f))
+                                .clickable { NowPlaying.seekTo(at); sheetLine = null }.padding(horizontal = 14.dp, vertical = 7.dp),
+                        )
+                    }
+                    if (now != null) Text(
+                        "做成卡片", fontSize = 13.sp, color = Wg.lav, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Wg.lav.copy(alpha = 0.12f))
+                            .clickable { Card.share(ctx, Card.lyric(line, now.title, now.artist, now.art), "lyric") }.padding(horizontal = 14.dp, vertical = 7.dp),
                     )
                 }
             }

@@ -56,6 +56,8 @@ import kotlinx.coroutines.launch
 // 浮在页面上的底部卡片
 @Composable
 internal fun Sheet(onClose: () -> Unit, content: @Composable () -> Unit) {
+    // 返回键先关浮层，别直接退出微光
+    androidx.activity.compose.BackHandler(onBack = onClose)
     Box(
         Modifier.fillMaxSize().background(Color(0x33342F55)).clickable(onClick = onClose),
         contentAlignment = Alignment.BottomCenter,

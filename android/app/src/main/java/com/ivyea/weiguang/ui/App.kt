@@ -6,6 +6,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -125,38 +133,65 @@ internal fun Shell(tab: Int, listenerOn: Boolean, now: Now?, lib: LibState, m: M
                 0 -> MomentScreen(now, m.accent, time, onOpenPlayer = { onTab(1) }, onOpenSettings = { onTab(3) })
                 1 -> NowScreen(now, m, time)
                 2 -> LibraryScreen(lib, now, m.accent, time)
-                else -> SettingsPage()
+                else -> SettingsPage(onBack = { onTab(0) })
             }
         }
-        Dock(tab, Modifier.align(Alignment.BottomCenter), onTab)
+        // 设置页是从 ··· 进去的二级页，不显示底栏，左上角返回
+        androidx.compose.animation.AnimatedVisibility(
+            tab != 3, Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(tween(200)), exit = fadeOut(tween(160)),
+        ) { Dock(tab, m.accent, Modifier, onTab) }
     }
 }
 
 // 底栏高度（不含系统导航条）；各页底部按它留白
-internal val DockH = 54.dp
+internal val DockH = 58.dp
 
-// 底栏：不再是一颗胶囊，只是贴底的三个字，背后一层从透明到纸白的渐隐，内容滑到这里慢慢淡掉。
+private val tabs = listOf(G.Spark to "此刻", G.Disc to "播放", G.Stack to "曲库")
+
+// 底栏：没有胶囊、没有底板，只有三枚细线图标。选中的那枚身后亮着一团「微光」（跟着封面换色），
+// 换页时光晕弹性地滑过去，名字在光里浮出来；背后一层纸白渐隐，让内容滑到这里慢慢淡掉。
 // 设置不常用，不占底栏，从「此刻」右上角的 ··· 进
 @Composable
-private fun Dock(tab: Int, modifier: Modifier, onTab: (Int) -> Unit) {
+private fun Dock(tab: Int, accent: Color, modifier: Modifier, onTab: (Int) -> Unit) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val slot = 76.dp
+    val x by animateDpAsState(slot * tab, spring(dampingRatio = 0.62f, stiffness = 320f), label = "glow")
     Box(
         modifier.fillMaxWidth()
-            .background(Brush.verticalGradient(0f to Wg.paper.copy(alpha = 0f), 0.45f to Wg.paper.copy(alpha = 0.82f), 1f to Wg.paper.copy(alpha = 0.95f)))
+            .background(Brush.verticalGradient(0f to Wg.paper.copy(alpha = 0f), 0.5f to Wg.paper.copy(alpha = 0.78f), 1f to Wg.paper.copy(alpha = 0.94f)))
             .navigationBarsPadding().height(DockH),
         contentAlignment = Alignment.Center,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
-            listOf("此刻", "播放", "曲库").forEachIndexed { i, label ->
-                val sel = i == tab
-                Column(
-                    Modifier.clip(RoundedCornerShape(999.dp)).clickable { onTab(i) }.padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(label, fontSize = 14.5.sp, color = if (sel) Wg.ink else Wg.ink3, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
-                    Box(
-                        Modifier.padding(top = 4.dp).size(4.dp).clip(CircleShape)
-                            .background(if (sel) Wg.warm else Color.Transparent),
-                    )
+        Box(Modifier.width(slot * tabs.size).fillMaxHeight()) {
+            // 光晕：一团柔光 + 中心一点暖色，像光球落在图标后面
+            Canvas(Modifier.offset(x = x).width(slot).fillMaxHeight()) {
+                val c = Offset(size.width / 2, size.height * 0.4f)
+                drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.10f), Color.Transparent), c, size.height * 0.62f), size.height * 0.62f, c)
+                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), Color.White.copy(alpha = 0f)), c, size.height * 0.3f), size.height * 0.3f, c)
+            }
+            Row(Modifier.fillMaxSize()) {
+                tabs.forEachIndexed { i, (g, label) ->
+                    val sel = i == tab
+                    val k by animateFloatAsState(if (sel) 1f else 0f, tween(260), label = "sel")
+                    Column(
+                        Modifier.width(slot).fillMaxHeight()
+                            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
+                                if (!sel) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                onTab(i)
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Glyph(
+                            g, androidx.compose.ui.graphics.lerp(Wg.ink3, Wg.ink, k),
+                            Modifier.size(22.dp).graphicsLayer { translationY = -3.dp.toPx() * k; scaleX = 1f + 0.08f * k; scaleY = 1f + 0.08f * k },
+                        )
+                        Text(
+                            label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Wg.ink.copy(alpha = k),
+                            modifier = Modifier.padding(top = 2.dp).graphicsLayer { translationY = 4.dp.toPx() * (1f - k) },
+                        )
+                    }
                 }
             }
         }
