@@ -96,6 +96,8 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
     val libPlays = Library.state.collectAsState().value.plays.size
     val recap = remember(libPlays / 5) { com.ivyea.weiguang.core.Recaps.week() }
     var nightly by remember { mutableStateOf(Prefs.nightly) }
+    // 月初三天：上个月的回顾单独一行，排在本周前面
+    val lastMonth = remember(libPlays / 5) { com.ivyea.weiguang.core.Recaps.month().takeIf { it.span != "这个月" && it.plays >= 5 } }
     // 上次的对话：这次还没聊就先不摊开
     val msgs = if (open) all else emptyList()
     val busy by Buddy.busy.collectAsState()
@@ -191,6 +193,7 @@ fun MomentScreen(now: Now?, accent: Color, time: State<Float>, onOpenPlayer: () 
             if (msgs.isEmpty()) {
                 if (all.isNotEmpty()) item { Resume(all.last(), accent) { Buddy.reopen() } }
                 item { FeelCard { f -> scope.launch { Buddy.feel(f) } } }
+                lastMonth?.let { m -> item { RecapRow(m, accent, "${m.span}你是") { sheet = "recap_month" } } }
                 if (recap.plays >= 5) item { RecapRow(recap, accent) { sheet = "recap" } }
                 if (recap.plays >= 5 && !nightly && !Prefs.nightlyAsked) item { NightlyOffer(accent) { nightly = it } }
                 item { MakeRow(onHum = { sheet = "hum" }, onGen = { sheet = "gen" }) }

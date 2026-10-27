@@ -41,14 +41,14 @@ import com.ivyea.weiguang.core.Recaps
 
 // 首页一行：这周你是哪种听歌的人，点开看整张回顾卡
 @Composable
-fun RecapRow(r: Recap, accent: Color, onOpen: () -> Unit) {
+fun RecapRow(r: Recap, accent: Color, label: String = "这周你是", onOpen: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().glass(20.dp, 3.dp).clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("这周你是", fontSize = 12.5.sp, color = Wg.ink3)
+                Text(label, fontSize = 12.5.sp, color = Wg.ink3)
                 Text("「${r.persona}」", fontFamily = Wg.serif, fontSize = 17.sp, color = Wg.ink, modifier = Modifier.padding(start = 2.dp))
             }
             Text(r.line, fontSize = 12.5.sp, color = Wg.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))

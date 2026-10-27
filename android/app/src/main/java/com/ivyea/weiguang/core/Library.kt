@@ -273,14 +273,28 @@ object Library {
     private val bg = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     fun syncAsync(ctx: Context) { bg.launch { sync(ctx.applicationContext) } }
 
-    suspend fun sync(ctx: Context) {
+    // 上次连不上的 App（多半是它没在后台、系统不让微光叫醒它）。它一出现在播放会话里，说明进程活着，就单独补同步一次
+    private val pending = HashSet<String>()
+    private val tried = HashMap<String, Long>()
+
+    fun catchUp(ctx: Context, pkg: String) {
+        if (pkg !in pending || _state.value.syncing) return
+        val now = System.currentTimeMillis()
+        if (now - (tried[pkg] ?: 0L) < 10 * 60_000L) return
+        tried[pkg] = now
+        bg.launch { kotlinx.coroutines.delay(3000); sync(ctx.applicationContext, setOf(pkg)) }
+    }
+
+    // only=只同步这几个 App（补同步用），其余歌单原样保留
+    suspend fun sync(ctx: Context, only: Set<String>? = null) {
         if (_state.value.syncing) return
-        val apps = Players.installed(ctx)
-        val servers = Sources.servers
-        if (apps.isEmpty() && servers.isEmpty()) { set { it.copy(syncMsg = "还没装音乐 App") }; return }
-        set { it.copy(syncing = true, syncMsg = "开始同步…") }
+        val apps = Players.installed(ctx).filter { only == null || it.pkg in only }
+        val servers = if (only == null) Sources.servers else emptyList()
+        if (apps.isEmpty() && servers.isEmpty()) { if (only == null) set { it.copy(syncMsg = "还没装音乐 App") }; return }
+        set { it.copy(syncing = true, syncMsg = if (only == null) "开始同步…" else "补同步${apps.joinToString("、") { a -> a.short }}…") }
         val songs = _state.value.songs.toMutableMap()
         val playlists = ArrayList<Playlist>()
+        if (only != null) playlists += _state.value.playlists.filter { it.src !in only && it.id != GEN && it.id != FAV }
         val log = StringBuilder()
         val errs = ArrayList<String>()
         var ok = 0
@@ -289,6 +303,7 @@ object Library {
                 set { it.copy(syncMsg = "连接${p.short}…") }
                 val b = connect(ctx, p.pkg)
                 if (b == null) {
+                    if (!connectAlive) pending += p.pkg
                     errs += "${p.short}：$connectError"
                     log.append("【${p.short}】").append(connectError).append('\n')
                     playlists += _state.value.playlists.filter { it.src == p.pkg }
@@ -299,7 +314,7 @@ object Library {
                     if (got == null) {
                         playlists += _state.value.playlists.filter { it.src == p.pkg }
                         errs += "${p.short}：没读到歌单"
-                    } else { playlists += got; ok++ }
+                    } else { playlists += got; ok++; pending -= p.pkg }
                 } catch (_: Throwable) {
                     errs += "${p.short}：读取中断"
                     playlists += _state.value.playlists.filter { it.src == p.pkg }
@@ -333,11 +348,11 @@ object Library {
                 it.copy(
                     // 一家都没成功（或被打断）就保留原来的歌单，别清空
                     // 同步期间新听到、新加的歌也留着
-                    songs = it.songs + songs, playlists = if (ok == 0) old.playlists else playlists, syncing = false,
-                    syncedAt = if (ok > 0) System.currentTimeMillis() else old.syncedAt,
-                    // 有一家成功就不打扰；全失败才把原因摆出来
-                    syncMsg = if (ok == 0) errs.joinToString("\n") else "",
-                    syncLog = log.toString(),
+                    songs = it.songs + songs, playlists = if (ok == 0) old.playlists else playlists.distinctBy { p -> p.id }, syncing = false,
+                    syncedAt = if (ok > 0 && only == null) System.currentTimeMillis() else old.syncedAt,
+                    // 有一家成功就不打扰；全失败才把原因摆出来（补同步失败不吵，下次再试）
+                    syncMsg = if (ok == 0 && only == null) errs.joinToString("\n") else if (only != null) old.syncMsg.takeIf { ok == 0 } ?: "" else "",
+                    syncLog = if (only == null) log.toString() else old.syncLog + log,
                 )
             }
             index(_state.value.songs)
@@ -486,6 +501,9 @@ object Library {
 
     var connectError = ""
         private set
+    // 上次连接被拒时对方是不是在运行（在运行还拒＝不对外开放，补同步也没用）
+    var connectAlive = false
+        private set
 
     // 连某个 App 的车机浏览服务（网易云要先给微光开通知使用权才肯连）
     suspend fun connect(ctx: Context, pkg: String): MediaBrowser? {
@@ -495,7 +513,12 @@ object Library {
             .queryIntentServices(Intent(MediaBrowserService.SERVICE_INTERFACE).setPackage(pkg), 0)
             .firstOrNull()?.serviceInfo
         if (svc == null) { connectError = "这个版本的${name}没有开放车机接口，只能读正在播放"; return null }
-        connectError = "${name}拒绝了连接。确认已给微光开「通知使用权」；小米手机还要在应用设置里允许微光「关联启动」"
+        // 连接被拒有两种：它根本没在运行、系统不让别人叫醒它（关联启动管在它那边）；或者它在运行但不对外开放目录（只认车机）。
+        // 它有播放会话＝进程活着，就是后一种
+        val alive = NowPlaying.controllerOf(pkg) != null
+        connectAlive = false
+        connectError = if (alive) "${name}不对外开放歌单目录。你用${name}听的歌会自动收进曲库"
+        else "${name}没在后台，系统不让微光叫醒它。下次打开${name}听歌时会自动补同步；想立刻同步，先打开${name}再点同步"
         var refused = false
         val b = withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<MediaBrowser?> { cont ->
@@ -508,6 +531,7 @@ object Library {
                 b.connect()
             }
         }
+        if (b == null && refused) connectAlive = alive
         if (b == null && !refused) connectError = "连接${name}超时，稍后再试"
         return b
     }
