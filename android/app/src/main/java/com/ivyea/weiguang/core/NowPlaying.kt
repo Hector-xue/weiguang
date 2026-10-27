@@ -122,6 +122,8 @@ object NowPlaying {
     private fun pick(list: List<MediaController>) {
         all = list
         watch(list)
+        // 上次同步连不上的 App 现在有会话了（进程活着），补同步它
+        app?.let { c -> for (m in list) if (Players.isKnown(m.packageName)) Library.catchUp(c, m.packageName) }
         fun playing(c: MediaController) = c.playbackState?.state == PlaybackState.STATE_PLAYING
         val music = list.filter { Players.isKnown(it.packageName) }
         val best = music.firstOrNull { playing(it) }

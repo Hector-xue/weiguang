@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -53,17 +54,29 @@ import com.ivyea.weiguang.core.Song
 import com.ivyea.weiguang.core.Sources
 import kotlinx.coroutines.launch
 
-// 浮在页面上的底部卡片
+// 浮在页面上的底部卡片：遮罩淡入、卡片带一点弹性从下面升上来；点遮罩或返回键先退场再关
 @Composable
 internal fun Sheet(onClose: () -> Unit, content: @Composable () -> Unit) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val k = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { k.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.82f, stiffness = 380f)) }
+    var closing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val close: () -> Unit = {
+        if (!closing) {
+            closing = true
+            scope.launch { k.animateTo(0f, androidx.compose.animation.core.tween(170)); onClose() }
+        }
+    }
     // 返回键先关浮层，别直接退出微光
-    androidx.activity.compose.BackHandler(onBack = onClose)
+    androidx.activity.compose.BackHandler(onBack = close)
     Box(
-        Modifier.fillMaxSize().background(Color(0x33342F55)).clickable(onClick = onClose),
+        Modifier.fillMaxSize().graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }.background(Color(0x33342F55)).clickable(onClick = close),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = DockH + 8.dp).glass(24.dp, 16.dp)
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = DockH + 8.dp)
+                .graphicsLayer { translationY = (1f - k.value) * 72.dp.toPx(); val sc = 0.96f + 0.04f * k.value; scaleX = sc; scaleY = sc }
+                .glass(24.dp, 16.dp)
                 .background(Color.White.copy(alpha = 0.6f)).clickable(enabled = false) {}.padding(20.dp),
         ) { content() }
     }

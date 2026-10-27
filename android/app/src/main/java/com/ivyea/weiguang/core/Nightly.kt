@@ -22,7 +22,7 @@ object Nightly {
     const val EXTRA = "wg_open"
     const val ID = 7
 
-    data class Note(val title: String, val text: String, val open: String, val play: Long?)
+    data class Note(val title: String, val text: String, val open: String, val play: Long?, val cover: String? = null)
 
     fun granted(ctx: Context) = Build.VERSION.SDK_INT < 33 ||
         ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -57,11 +57,11 @@ object Nightly {
 
         if (c.get(Calendar.DAY_OF_MONTH) == 1) {
             val m = Recaps.month(now)
-            if (m.plays >= 5) return Note("${m.span}的听歌回顾出来了", "你是「${m.persona}」。${m.line}", "recap_month", null)
+            if (m.plays >= 5) return Note("${m.span}的听歌回顾出来了", "你是「${m.persona}」。${m.line}", "recap_month", null, m.top.firstOrNull()?.first?.pic)
         }
         if (c.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY) {
             val w = Recaps.week(now)
-            if (w.plays >= 5) return Note("这周你是「${w.persona}」", w.line, "recap_week", null)
+            if (w.plays >= 5) return Note("这周你是「${w.persona}」", w.line, "recap_week", null, w.top.firstOrNull()?.first?.pic)
         }
 
         val today = dayKey(now)
@@ -71,7 +71,7 @@ object Nightly {
         if (top != null) {
             val (s, n) = top
             val t = if (n >= 2) "今天听了 ${ps.size} 首，它放了 $n 遍。睡前再听一次？" else "今天听了 ${ps.size} 首，睡前用它收个尾？"
-            return Note("今天的歌：《${Meta.short(s.title)}》", t, "moment", s.id)
+            return Note("今天的歌：《${Meta.short(s.title)}》", t, "moment", s.id, s.pic)
         }
 
         // 今天没听：挑一首听过好几次、但一周多没碰的
@@ -84,10 +84,11 @@ object Nightly {
             .filter { it.title.isNotEmpty() && (!Prefs.zhOnly || Library.isZh(it)) }
         val pick = old.randomOrNull() ?: return Note("今天还没一起听歌", "睡前来一首吧，说说今天怎么样，我帮你挑。", "moment", null)
         val days = ((now - (last[pick.id] ?: now)) / (24 * 3600 * 1000)).toInt()
-        return Note("好久没听《${Meta.short(pick.title)}》了", "上次听它是 $days 天前。今晚放一次？", "moment", pick.id)
+        return Note("好久没听《${Meta.short(pick.title)}》了", "上次听它是 $days 天前。今晚放一次？", "moment", pick.id, pick.pic)
     }
 
-    fun fire(ctx: Context) {
+    // 在后台线程跑（接收器 goAsync），封面最多等 6 秒，拿不到就不带图
+    suspend fun fire(ctx: Context) {
         Prefs.init(ctx)
         if (!Prefs.nightly) return
         schedule(ctx)
@@ -98,10 +99,12 @@ object Nightly {
         com.ivyea.weiguang.service.RecapWidget.refresh(ctx)
         val n = compose() ?: return
         Prefs.nightlyLast = today
-        show(ctx, n)
+        Art.init(ctx)
+        val art = n.cover?.takeIf { it.isNotEmpty() }?.let { kotlinx.coroutines.withTimeoutOrNull(6000) { Art.load(it, 256) } }
+        show(ctx, n, art)
     }
 
-    private fun show(ctx: Context, n: Note) {
+    private fun show(ctx: Context, n: Note, art: android.graphics.Bitmap?) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "每晚一首", NotificationManager.IMPORTANCE_DEFAULT))
         fun open(what: String, code: Int) = PendingIntent.getActivity(
@@ -114,6 +117,7 @@ object Nightly {
             .setStyle(NotificationCompat.BigTextStyle().bigText(n.text))
             .setContentIntent(open(n.open, 1))
             .setAutoCancel(true)
+            .setLargeIcon(art)
         if (n.play != null) b.addAction(0, "放这首", open("play:${n.play}", 2))
         try { nm.notify(ID, b.build()) } catch (_: SecurityException) {}
     }
