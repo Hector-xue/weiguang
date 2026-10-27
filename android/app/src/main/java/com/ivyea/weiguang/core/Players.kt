@@ -61,13 +61,14 @@ object Players {
     // 点歌能选的：装了的 App + 微光自己（自建曲库、电台，不开别的 App）
     fun choices(ctx: Context): List<Player> = installed(ctx) + self
 
-    // 点歌用哪个 App：设置里指定的 > 正在放的 > 上次放过的 > 网易云 > 装了的第一个
+    // 点歌用哪个 App：设置里指定的 > 正在放的 > 上次放过的（都要接得住点歌）> 网易云 > 装了的第一个
     fun target(ctx: Context): String? {
         val inst = choices(ctx).map { it.pkg }
         if (inst.isEmpty()) return null
         Prefs.player.takeIf { it in inst }?.let { return it }
-        NowPlaying.now.value?.pkg?.takeIf { it in inst }?.let { return it }
-        Prefs.lastPlayer.takeIf { it in inst }?.let { return it }
+        // 试过接不住点歌的 App（比如汽水）不当默认：正在放它也换别家点
+        NowPlaying.now.value?.pkg?.takeIf { it in inst && Prefs.how(it) != "none" }?.let { return it }
+        Prefs.lastPlayer.takeIf { it in inst && Prefs.how(it) != "none" }?.let { return it }
         return if (Ncm.PKG in inst) Ncm.PKG else inst.first { it != Local.PKG || inst.size == 1 }
     }
 
@@ -136,6 +137,12 @@ object Players {
             }
         }
         Prefs.setHow(pkg, "none")
+        // 不是用户在设置里指定的，又装了网易云：直接换网易云放，以后也默认用它
+        if (Prefs.player != pkg && installed(ctx).any { it.pkg == Ncm.PKG }) {
+            toast(ctx, "$name 不接受别的 App 点歌，换网易云放")
+            playIn(ctx, Ncm.PKG, s)
+            return
+        }
         copy(ctx, query(s))
         openApp(ctx, pkg)
         toast(ctx, "$name 没接住点歌，已打开它，歌名复制好了，粘贴到搜索就行")
