@@ -85,6 +85,19 @@
                 android:resource="@xml/widget_now" />
         </receiver>
 
+        <!-- 听歌人格小组件 -->
+        <receiver
+            android:name=".service.RecapWidget"
+            android:exported="false"
+            android:label="听歌人格">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_recap" />
+        </receiver>
+
         <!-- 通知使用权：有了它才能读音乐 App 的播放会话；悬浮光球也挂在它身上（系统常驻绑定，不用前台通知） -->
         <service
             android:name=".service.NowListener"

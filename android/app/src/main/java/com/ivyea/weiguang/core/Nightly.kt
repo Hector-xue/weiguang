@@ -95,6 +95,7 @@ object Nightly {
         if (Prefs.nightlyLast == today || !granted(ctx)) return
         Library.init(ctx)
         Diary.init(ctx)
+        com.ivyea.weiguang.service.RecapWidget.refresh(ctx)
         val n = compose() ?: return
         Prefs.nightlyLast = today
         show(ctx, n)

@@ -97,6 +97,8 @@ fun App() {
     }
     val thought by Buddy.thought.collectAsState()
     LaunchedEffect(thought) { NowWidget.refresh(ctx.applicationContext) }
+    // 听歌人格小组件：每多 5 次播放刷一次
+    LaunchedEffect(lib.plays.size / 5) { com.ivyea.weiguang.service.RecapWidget.refresh(ctx.applicationContext) }
     LaunchedEffect(Unit) { Buddy.runQueue(ctx.applicationContext) }
 
     // 从通知点进来：都先回「此刻」，回顾浮层由此刻页接着打开

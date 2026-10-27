@@ -129,6 +129,23 @@ class ShotsTest {
         java.io.File("build/shots").mkdirs()
         java.io.File("build/shots/11_nightly.txt").writeText("${n!!.title}\n${n.text}\n${n.open} ${n.play}")
     }
+    // 两个小组件：真把 RemoteViews 铺出来画成图（也拿来当桌面的预览图）
+    private fun widget(v: android.widget.RemoteViews, wDp: Int, hDp: Int, name: String) {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val d = ctx.resources.displayMetrics.density
+        val parent = android.widget.FrameLayout(ctx)
+        val view = v.apply(ctx, parent)
+        val w = (wDp * d).toInt(); val h = (hDp * d).toInt()
+        view.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY))
+        view.layout(0, 0, w, h)
+        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        view.draw(Canvas(b))
+        save(b, name)
+    }
+    @Test fun s11_widgets() {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        widget(com.ivyea.weiguang.service.RecapWidget.views(ctx), 170, 170, "13_widget_recap")
+    }
     @Test fun s10_recapMonth() = shot("12_recap_month") {
         com.ivyea.weiguang.ui.RecapSheet(com.ivyea.weiguang.core.Recaps.week(), mood.accent, month0 = true) {}
     }

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_desc">正在放的歌、微光的一句话和播放控制</string>
+    <string name="widget_recap_desc">这周你是哪种听歌的人，点开看本周回顾</string>
 </resources>
