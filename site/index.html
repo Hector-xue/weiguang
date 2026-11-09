@@ -76,6 +76,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .btn small{font-size:12px;opacity:.82;font-weight:400}
 .btn.small{height:38px;padding:0 18px;font-size:14px;flex:none}
 .btn.small::after{animation:none;display:none}
+.btn.small.biz{background:rgba(255,255,255,.6);color:var(--ink);border:1px solid rgba(15,23,42,.1);margin-left:10px}
+.btn.small.biz:hover{background:rgba(255,255,255,.9)}
 
 /* ───── 首屏 ───── */
 .hero{position:relative;min-height:calc(100vh - 64px);min-height:calc(100svh - 64px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px 0 40px}
@@ -284,6 +286,8 @@ footer{padding:56px 0 64px;border-top:1px solid var(--line);margin-top:60px}
 @media (max-width:980px){
   .links{display:none}
   .gh-link{margin-left:auto}
+  .btn.small.biz{margin-left:auto}
+  .biz + .gh-link{margin-left:0}
   section.sec{padding:84px 0}
   .feat,.feat.rev,.feel{grid-template-columns:1fr;gap:48px;justify-items:center}
   .feat.rev .txt{order:0}
@@ -315,6 +319,10 @@ footer{padding:56px 0 64px;border-top:1px solid var(--line);margin-top:60px}
   .btn{height:46px;padding:0 20px}
   .dl .cta .btn{flex:1;justify-content:center}
 }
+@media (max-width:420px){
+  .biz + .gh-link{display:none}
+  .btn.small.biz{padding:0 13px}
+}
 @media (prefers-reduced-motion:reduce){
   .sky i,.btn.pri::after,h1 em,.say .row,.phone .art,.dl::before,.dl-head img,.badge b{animation:none}
   .rv,.split .ch{opacity:1;transform:none;filter:none;transition:none}
@@ -338,6 +346,7 @@ footer{padding:56px 0 64px;border-top:1px solid var(--line);margin-top:60px}
       <a href="#lyrics">歌词</a>
       <a href="#faq">问答</a>
     </nav>
+    <a class="btn small biz" href="https://ivyea.com/ai/?utm_source=weiguang&amp;utm_medium=product&amp;utm_content=nav">帮公司接 AI</a>
     <a class="gh-link" href="https://github.com/Hector-xue/weiguang" target="_blank" rel="noopener" aria-label="GitHub 源码"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 008 0z"/></svg></a>
     <a class="btn pri small" href="#download">下载</a>
   </div>
